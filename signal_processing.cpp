@@ -46,8 +46,10 @@ void Signal_processing::process() {
             for( int j=0; j<size_signals; j++ )
                 signal[ j ] -= mean_val/size_signals;
 
+            signal[ 0 ] = 0.f;
+
             // filter signal
-            //filter( signal, size_signals, 30.f, output, 4, 0.4f, 4.f);
+            // filter( signal, size_signals, 30.f, output, 4, 0.4f, 4.f);
 
             // compute fft
             for( int j=0; j<size_signals; j++ )
@@ -62,9 +64,9 @@ void Signal_processing::process() {
 
         }
 
-        CvPlot::clear("signal");
+        /*CvPlot::clear("signal");
         CvPlot::plot( "signal", SNR, nb_sp );
-        cv::waitKey( 1 );
+        cv::waitKey( 1 );*/
 
         delete[] signal;
         delete[] output;

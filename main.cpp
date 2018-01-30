@@ -22,6 +22,7 @@
 
 #define SAVE_output 0
 #define visu        1
+#define signal_size 300
 
 using namespace std;
 //=================================================================================
@@ -151,6 +152,7 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
 #if visu
     if( frame_index % 3 == 0 ) {
+
         cv::Mat* output_bounds = new cv::Mat(cvSize(width, height), CV_8UC1);
         const int color = 0xFFFFFFFF;
 
@@ -186,13 +188,37 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
         }
 
+        // SNR superposition
+        float* SNR;
+        if( frame_index > signal_size ) {
+            SNR = Signal->get_SNR();
+
+        }
+
         for (i=0, ii=0; i < 3 * size; i += 3, ii++) {
             int sp = labels[ii];
 
             if (sp >= 0) {
-                pImg->ptr()[i]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
-                pImg->ptr()[i + 1]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
-                pImg->ptr()[i + 2]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
+                if( frame_index > signal_size ) {
+                    if( SNR[ labels[ii] ] > 0 && ubuff[ ii ] == 255 ) {
+                        pImg->ptr()[i + 2]      = 255;//(unsigned char)(10*SNR[ labels[ii] ]);
+                        pImg->ptr()[i + 1]      = 0;//(unsigned char)(10*SNR[ labels[ii] ]);
+                        pImg->ptr()[i]      = 0;//(unsigned char)(10*SNR[ labels[ii] ]);
+
+                    }
+                    else {
+                        pImg->ptr()[i + 2]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
+                        pImg->ptr()[i + 1]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
+                        pImg->ptr()[i]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
+                    }
+
+                }
+                else {
+                    pImg->ptr()[i + 2]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
+                    pImg->ptr()[i + 1]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
+                    pImg->ptr()[i]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
+
+                }
 
             }
 
@@ -326,7 +352,7 @@ int main( int argc, char* argv[] )
     else if( type == 1 ) {
         // IBIS
         IBIS Super_Pixel( K, compa );
-        Signal_processing Signal( K, 300 );
+        Signal_processing Signal( K, signal_size );
 
         // get picture
         cv::VideoCapture video( argv[ 3 ] );
@@ -363,7 +389,7 @@ int main( int argc, char* argv[] )
         int width = 0;
         int height = 0;
         IBIS* Super_Pixel;
-        Signal_processing Signal( K, 300 );
+        Signal_processing Signal( K, signal_size );
         char* image_name = (char*)malloc(255);
         while (n--) {
             printf("processing %s\n", namelist[n]->d_name);
