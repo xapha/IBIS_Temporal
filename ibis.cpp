@@ -35,13 +35,19 @@ IBIS::IBIS(int _maxSPNum, int _compacity ) {
     adjacent_sp = new int[size_roi*maxSPNumber];
     count_adjacent = new int[maxSPNumber];
 
+    // temporal
+    count_diff = new int[maxSPNumber];
+    Xseeds_prev = new float[maxSPNumber];
+    Yseeds_prev = new float[maxSPNumber];
+    lseeds_prev = new float[maxSPNumber];
+    aseeds_prev = new float[maxSPNumber];
+    bseeds_prev = new float[maxSPNumber];
+    inheritance = new int[maxSPNumber];
+
 }
 
 IBIS::~IBIS() {
     delete[] labels;
-    delete[] avec;
-    delete[] lvec;
-    delete[] bvec;
     delete[] inv;
 
     // allocated in constructor
@@ -72,6 +78,25 @@ IBIS::~IBIS() {
     delete[] count_adjacent;
     delete[] initial_repartition;
     delete[] processed;
+
+    // temporal
+    delete[] avec_bis;
+    delete[] lvec_bis;
+    delete[] bvec_bis;
+
+    delete[] avec_one;
+    delete[] lvec_one;
+    delete[] bvec_one;
+
+    delete[] count_diff;
+
+    delete[] Xseeds_prev;
+    delete[] Yseeds_prev;
+    delete[] lseeds_prev;
+    delete[] aseeds_prev;
+    delete[] bseeds_prev;
+
+    delete[] inheritance;
 
 }
 
@@ -187,16 +212,12 @@ void IBIS::initSeeds() {
 void IBIS::mean_seeds() {
 
     for( int i=0; i<SPNumber; i++ ) {
-        inv[ i ] = 1.f / countPx[ i ];
-    }
-
-    for( int i=0; i<SPNumber; i++ ) {
         if( countPx[ i ] > 0 ) {
-            Xseeds[ i ] = Xseeds_Sum[ i ] * inv[ i ];
-            Yseeds[ i ] = Yseeds_Sum[ i ] * inv[ i ];
-            lseeds[ i ] = lseeds_Sum[ i ] * inv[ i ];
-            aseeds[ i ] = aseeds_Sum[ i ] * inv[ i ];
-            bseeds[ i ] = bseeds_Sum[ i ] * inv[ i ];
+            Xseeds[ i ] = Xseeds_Sum[ i ] / countPx[ i ];
+            Yseeds[ i ] = Yseeds_Sum[ i ] / countPx[ i ];
+            lseeds[ i ] = lseeds_Sum[ i ] / countPx[ i ];
+            aseeds[ i ] = aseeds_Sum[ i ] / countPx[ i ];
+            bseeds[ i ] = bseeds_Sum[ i ] / countPx[ i ];
 
         }
 
@@ -314,11 +335,6 @@ void IBIS::enforceConnectivity()
 void IBIS::init() {
     int ii, step;
 
-    // image lab buffer
-    avec = new float[size];
-    bvec = new float[size];
-    lvec = new float[size];
-
     //store mean distance between 2 seeds info
     SPTypicalLength = (int)(std::sqrt((float)(size) / (float)(maxSPNumber))) + 1;
 
@@ -390,6 +406,18 @@ void IBIS::init() {
 
     }
 
+    // TEMPORAL init
+    img_bis = false;
+
+    // image lab buffer
+    avec_bis = new float[size];
+    bvec_bis = new float[size];
+    lvec_bis = new float[size];
+
+    avec_one = new float[size];
+    bvec_one = new float[size];
+    lvec_one = new float[size];
+
 }
 
 void IBIS::reset() {
@@ -411,6 +439,7 @@ void IBIS::reset() {
         lseeds[ i ] = lvec[ index_xy ];
         aseeds[ i ] = avec[ index_xy ];
         bseeds[ i ] = bvec[ index_xy ];
+
     }
 
     memset( lseeds_Sum, 0, sizeof( float ) * maxSPNumber );
@@ -418,6 +447,7 @@ void IBIS::reset() {
     memset( bseeds_Sum, 0, sizeof( float ) * maxSPNumber );
     memset( Xseeds_Sum, 0, sizeof( float ) * maxSPNumber );
     memset( Yseeds_Sum, 0, sizeof( float ) * maxSPNumber );
+    memset( processed, 0, sizeof( int ) * size );
 
     for( int i=0; i<count_mask; i++ )
         mask_buffer[ i ].reset();
@@ -429,17 +459,48 @@ void IBIS::getLAB( cv::Mat* img ) {
     cv::cvtColor(*img, lab_image, CV_BGR2Lab, 0);
 
     int ii = 0;
-    for (int i = 0; i < size * 3; i += 3) {
+
+    if( img_bis ) {
+        for (int i = 0; i < size * 3; i += 3) {
 #if MATLAB_lab
-        lvec[ii] = lab_image.ptr()[i] * 100 / 255;
-        avec[ii] = lab_image.ptr()[i + 1] - 128;
-        bvec[ii] = lab_image.ptr()[i + 2] - 128;
+            lvec_bis[ii] = lab_image.ptr()[i] * 100 / 255;
+            avec_bis[ii] = lab_image.ptr()[i + 1] - 128;
+            bvec_bis[ii] = lab_image.ptr()[i + 2] - 128;
 #else
-        lvec[ii] = lab_image.ptr()[i];
-        avec[ii] = lab_image.ptr()[i + 1];
-        bvec[ii] = lab_image.ptr()[i + 2];
+            lvec_bis[ii] = lab_image.ptr()[i];
+            avec_bis[ii] = lab_image.ptr()[i + 1];
+            bvec_bis[ii] = lab_image.ptr()[i + 2];
 #endif
-        ii++;
+            ii++;
+        }
+
+        lvec = lvec_bis;
+        avec = avec_bis;
+        bvec = bvec_bis;
+
+        img_bis = false;
+
+    }
+    else {
+        for (int i = 0; i < size * 3; i += 3) {
+#if MATLAB_lab
+            lvec_one[ii] = lab_image.ptr()[i] * 100 / 255;
+            avec_one[ii] = lab_image.ptr()[i + 1] - 128;
+            bvec_one[ii] = lab_image.ptr()[i + 2] - 128;
+#else
+            lvec_one[ii] = lab_image.ptr()[i];
+            avec_one[ii] = lab_image.ptr()[i + 1];
+            bvec_one[ii] = lab_image.ptr()[i + 2];
+#endif
+            ii++;
+        }
+
+        lvec = lvec_one;
+        avec = avec_one;
+        bvec = bvec_one;
+
+        img_bis = true;
+
     }
 
 }
@@ -458,12 +519,52 @@ void IBIS::process( cv::Mat* img ) {
         // STEP 1 : initialize with fix grid seeds value
         initSeeds();
 
+        for( int i=0; i < SPNumber; i++ ) {
+            Xseeds[ i ] = Xseeds_init[ i ];
+            Yseeds[ i ] = Yseeds_init[ i ];
+
+            int index_xy = vertical_index[ (int) Yseeds[ i ] ] + Xseeds[ i ];
+
+            lseeds[ i ] = lvec_one[ index_xy ];
+            aseeds[ i ] = avec_one[ index_xy ];
+            bseeds[ i ] = bvec_one[ index_xy ];
+
+        }
+
+        // convert to Lab
+        getLAB( img );
+
+        index_frame = 0;
+
+    }
+    else {
+        // convert to Lab
+        getLAB( img );
+
+        index_frame++;
+        memcpy(Xseeds_prev, Xseeds, sizeof(float)*maxSPNumber);
+        memcpy(Yseeds_prev, Yseeds, sizeof(float)*maxSPNumber);
+        memcpy(lseeds_prev, lseeds, sizeof(float)*maxSPNumber);
+        memcpy(aseeds_prev, aseeds, sizeof(float)*maxSPNumber);
+        memcpy(bseeds_prev, bseeds, sizeof(float)*maxSPNumber);
+
+        //diff_frame();
+
+        /*int test[size] = {0};
+        for(int i=0; i<size; i++) {
+            if( count_diff[ labels[i] ] ) {
+                test[i]=1;
+
+            }
+
+        }
+
+        imagesc( "elligible SP", test, width, height );
+        cv::waitKey(1);*/
+
     }
 
-    // convert to Lab
-    getLAB( img );
-
-    // prepare value to compute a picture
+    // prepare value to segment a picture
     reset();
 
     // STEP 2 : process IBIS
@@ -483,6 +584,43 @@ void IBIS::process( cv::Mat* img ) {
 #endif
 
     //enforceConnectivity();
+
+    // propag
+    if( index_frame > 0 ) {
+        for( int i=0; i<SPNumber; i++ ) {
+            int best_parent = -1;
+            float D = -1.f;
+            float dist_xy = 0;
+            float dist_lab = 0;
+            float total_dist;
+
+            for( int j=0; j<SPNumber; j++ ) {
+
+                dist_xy = ( Xseeds_prev[ i ] - Xseeds[ j ] ) * ( Xseeds_prev[ i ] - Xseeds[ j ] ) +
+                          ( Yseeds_prev[ i ] - Yseeds[ j ] ) * ( Yseeds_prev[ i ] - Yseeds[ j ] );
+
+                if( dist_xy < SPTypicalLength*SPTypicalLength*4 ) {
+
+                    dist_lab = ( lseeds_prev[ i ] - lseeds[ j ] ) * ( lseeds_prev[ i ] - lseeds[ j ] ) +
+                               ( aseeds_prev[ i ] - aseeds[ j ] ) * ( aseeds_prev[ i ] - aseeds[ j ] ) +
+                               ( bseeds_prev[ i ] - bseeds[ j ] ) * ( bseeds_prev[ i ] - bseeds[ j ] );
+
+                    total_dist = dist_lab + invwt * dist_xy;
+                    if( total_dist < D || D < 0) {
+                        best_parent = j;
+                        D = total_dist;
+
+                    }
+
+                }
+
+            }
+
+            inheritance[ i ] = best_parent;
+
+        }
+
+    }
 
 #if OUTPUT_log
     st4 = now_ms() - lap;
@@ -550,6 +688,39 @@ void IBIS::mask_propagate_SP() {
         imagesc( std::string("labels"), labels, width, height );
         cv::waitKey(0);
 #endif
+
+    }
+
+}
+
+// ------------------------------------------------------------------------------- IBIS temporal
+void IBIS::diff_frame() {
+    int i = 0;
+    float diff_dist;
+    float sensitivity_limit;
+
+    int sensitivity = 10;
+    int inertia = 10;
+
+    std::fill( count_diff, count_diff + SPNumber, 0 );
+
+    for( i = 0; i < size; i++ ) {
+        diff_dist = ( lvec_one[ i ] - lvec_bis[ i ] ) * ( lvec_one[ i ] - lvec_bis[ i ] ) +
+                    ( avec_one[ i ] - avec_bis[ i ] ) * ( avec_one[ i ] - avec_bis[ i ] ) +
+                    ( bvec_one[ i ] - bvec_bis[ i ] ) * ( bvec_one[ i ] - bvec_bis[ i ] );
+
+        if( diff_dist > inertia*inertia )
+            count_diff[ labels[ i ] ]++;
+
+    }
+
+    for( i = 0; i < SPNumber; i++ ) {
+        sensitivity_limit = ( ( float( sensitivity ) / 100 ) * countPx[ i ] );
+
+        if( count_diff[ i ] > sensitivity_limit )
+            count_diff[ i ] = 1;
+        else
+            count_diff[ i ] = 0;
 
     }
 

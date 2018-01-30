@@ -18,8 +18,10 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include "utils.h"
+#include "signal_processing.h"
 
 #define SAVE_output 0
+#define visu        1
 
 using namespace std;
 //=================================================================================
@@ -108,8 +110,10 @@ void write_labels(IplImage* input, const std::string& output_labels)
         for (int x=0 ; x<input->width-1 ; x++)
         {
             file << (int) data[y*input->widthStep + x*input->nChannels] << " ";
+
         }
         file << (int) data[y*input->widthStep + (input->width -1)*input->nChannels] << std::endl;
+
     }
 
     file.close();
@@ -123,30 +127,88 @@ std::string get_name(const std::string& path_with_ext)
 
 }
 
-void execute_IBIS( int K, int compa, IBIS* Super_Pixel, cv::Mat* img, std::string output_basename, int frame_index ) {
+void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signal, cv::Mat* img, std::string output_basename, int frame_index ) {
+
+    printf("-frame\t%i\n", frame_index);
 
     int width = img->cols;
     int height = img->rows;
+    int size = width * height;
 
     // process IBIS
     Super_Pixel->process( img );
 
-    // convert int* labels to Mat* labels in gray scale
+    // signal processing
+    Signal->add_frame( Super_Pixel->get_inheritance(),
+                       Super_Pixel->get_lseeds(),
+                       Super_Pixel->get_aseeds(),
+                       Super_Pixel->get_bseeds(),
+                       Super_Pixel->getActualSPNumber() );
+
+    Signal->process();
+
     int* labels = Super_Pixel->getLabels();
-#if !SAVE_output
-    cv::Mat* output_bounds = new cv::Mat(cvSize(width, height), CV_8UC1);
-    const int color = 0xFFFFFFFF;
 
-    unsigned char* ubuff = output_bounds->ptr();
-    std::fill(ubuff, ubuff + (width*height), 0);
+#if visu
+    if( frame_index % 3 == 0 ) {
+        cv::Mat* output_bounds = new cv::Mat(cvSize(width, height), CV_8UC1);
+        const int color = 0xFFFFFFFF;
 
-    DrawContoursAroundSegments(ubuff, labels, width, height, color);
+        unsigned char* ubuff = output_bounds->ptr();
+        std::fill(ubuff, ubuff + (width*height), 0);
 
-    cv::imshow( std::string("Ibis segmentation"), *output_bounds );
-    cv::waitKey(1);
+        DrawContoursAroundSegments(ubuff, labels, width, height, color);
 
-    delete output_bounds;
-#elif SAVE_output
+        cv::imshow( std::string("Ibis segmentation"), *output_bounds );
+        cv::waitKey( 1 );
+
+        //imagesc( "labels", labels, width, height );
+
+        cv::Mat* pImg = new cv::Mat(cvSize(width, height), CV_8UC3);
+        float* sum_rgb = new float[Super_Pixel->getMaxSPNumber()*3];
+        int* count_px = new int[Super_Pixel->getMaxSPNumber()];
+        std::fill(sum_rgb, sum_rgb+Super_Pixel->getMaxSPNumber()*3, 0.f);
+        std::fill(count_px, count_px+Super_Pixel->getMaxSPNumber(), 0);
+
+        int ii = 0, i;
+        for (i = 0; i < 3 * size; i += 3, ii++) {
+            count_px[ labels[ii] ]++;
+            sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ] += img->ptr()[i];
+            sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ] += img->ptr()[i+1];
+            sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ] += img->ptr()[i+2];
+
+        }
+
+        for (i=0; i<Super_Pixel->getMaxSPNumber(); i++) {
+            sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 0 ] /= count_px[ i ];
+            sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 1 ] /= count_px[ i ];
+            sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 2 ] /= count_px[ i ];
+
+        }
+
+        for (i=0, ii=0; i < 3 * size; i += 3, ii++) {
+            int sp = labels[ii];
+
+            if (sp >= 0) {
+                pImg->ptr()[i]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
+                pImg->ptr()[i + 1]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
+                pImg->ptr()[i + 2]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
+
+            }
+
+        }
+
+        cv::imshow("rgb mean", *pImg);
+        cv::waitKey( 1 );
+
+        delete[] sum_rgb;
+        delete[] count_px;
+        delete pImg;
+        delete output_bounds;
+
+    }
+#endif
+#if SAVE_output
     const int width = img->cols;
     const int height = img->rows;
     const int color = 0xFFFFFFFF;
@@ -264,6 +326,7 @@ int main( int argc, char* argv[] )
     else if( type == 1 ) {
         // IBIS
         IBIS Super_Pixel( K, compa );
+        Signal_processing Signal( K, 300 );
 
         // get picture
         cv::VideoCapture video( argv[ 3 ] );
@@ -276,7 +339,7 @@ int main( int argc, char* argv[] )
         cv::Mat img;
         int ii=0;
         while( video.read( img ) ) {
-            execute_IBIS( K, compa, &Super_Pixel, &img, argv[ 3 ], ii );
+            execute_IBIS( K, compa, &Super_Pixel, &Signal, &img, argv[ 3 ], ii );
             ii++;
 
         }
@@ -300,6 +363,7 @@ int main( int argc, char* argv[] )
         int width = 0;
         int height = 0;
         IBIS* Super_Pixel;
+        Signal_processing Signal( K, 300 );
         char* image_name = (char*)malloc(255);
         while (n--) {
             printf("processing %s\n", namelist[n]->d_name);
@@ -330,7 +394,7 @@ int main( int argc, char* argv[] )
 
             }
 
-            execute_IBIS( K, compa, Super_Pixel, &img, image_name, 0 );
+            execute_IBIS( K, compa, Super_Pixel, &Signal, &img, image_name, 0 );
 
             free(namelist[n]);
 

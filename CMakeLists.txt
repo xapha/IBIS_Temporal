@@ -11,6 +11,7 @@ if (OPENMP_FOUND)
 endif()
 
 find_package( OpenCV REQUIRED )
+find_package( GSL REQUIRED )
 
 set(CMAKE_CXX_STANDARD 14)
 set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
@@ -18,6 +19,8 @@ set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
 set(sourceList
     utils.cpp
     ibis.cpp
+    signal_processing.cpp
+    cv_plot.cpp
     main.cpp
 
 )
@@ -25,12 +28,16 @@ set(sourceList
 set(headerList
     ibis.h
     utils.h
+    cvplot.h
+    signal_processing.h
 
 )
 
 set(includeDirList ${includeDirList} $ENV{OPENCV_DIR}/include ./ )
 include_directories(/usr/local/include/opencv)
 include_directories(/usr/local/include/opencv2)
+include_directories(/usr/include/gsl)
+include_directories(/usr/include)
 
 set(libDirList ${libDirList} $ENV{OPENCV_DIR}/x64/vc14/lib )
 
@@ -38,4 +45,4 @@ include_directories(${includeDirList})
 link_directories(${libDirList})
 
 add_executable( ${PROJECT_NAME} ${sourceList} ${headerList} )
-target_link_libraries( ${PROJECT_NAME} ${OpenCV_LIBS} )
+target_link_libraries( ${PROJECT_NAME} ${OpenCV_LIBS} /usr/lib64/libgslcblas.so /usr/lib64/libgsl.so )

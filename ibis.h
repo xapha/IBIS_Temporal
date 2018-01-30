@@ -24,6 +24,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <omp.h>
 #include <chrono>
+#include <algorithm>
 #include "utils.h"
 
 // algo debug parameters
@@ -51,7 +52,12 @@ public:
     int getMaxSPNumber() { return maxSPNumber;}
     int getActualSPNumber() { return SPNumber; }
     int* getLabels() { return labels; }
-
+    int* get_inheritance() { return inheritance; }
+    float* get_Xseeds() { return Xseeds; }
+    float* get_Yseeds() { return Yseeds; }
+    float* get_lseeds() { return lseeds; }
+    float* get_aseeds() { return aseeds; }
+    float* get_bseeds() { return bseeds; }
 
     float get_complexity();
 
@@ -63,6 +69,9 @@ protected:
 
     double now_ms(void);
     void enforceConnectivity();
+
+    // temporal
+    void diff_frame();
 
 private:
 
@@ -147,11 +156,10 @@ private:
     int x_limit;
     float invwt;
     int minSPSizeThreshold;
-
+    int maxSPNumber;            // number of Sp passed by user
     int SPNumber;               // number of Sp actually created
     int SPTypicalLength;		// typical size of the width or height for a SP
     int compacity;              // compacity factor
-    int maxSPNumber;            // number of Sp passed by user
 
     // seeds value
     float* Xseeds;
@@ -168,6 +176,28 @@ private:
     float* lvec;
     float* avec;
     float* bvec;
+
+    // temporal data
+    float* lvec_bis;
+    float* avec_bis;
+    float* bvec_bis;
+
+    float* lvec_one;
+    float* avec_one;
+    float* bvec_one;
+
+    float* Xseeds_prev;
+    float* Yseeds_prev;
+    float* lseeds_prev;
+    float* aseeds_prev;
+    float* bseeds_prev;
+
+    bool img_bis;
+
+    // difference between frame
+    int index_frame;
+    int* count_diff;
+    int* inheritance;
 
 public:
     double st2, st3, st4;
