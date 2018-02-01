@@ -73,7 +73,7 @@ void Signal_processing::process() {
                 fft_data[j] *= fft_data[j];
 
             // get fundamental freq
-            circular_fundamental[ max_SP * temp_index + i ] = gsl_stats_max_index( fft_data, 1, size_signals ) / 30 * 100;
+            circular_fundamental[ max_SP * temp_index + i ] = double(gsl_stats_max_index( fft_data, 1, size_signals ));
             // get SNR value
             circular_SNR[ max_SP * temp_index + i ] = compute_SNR(fft_data, size_signals, 5, 2, 0);
             SNR[i] += circular_SNR[ max_SP * temp_index + i ];
@@ -89,19 +89,19 @@ void Signal_processing::process() {
 
         }
 
-        int repart[ 200 * 150 ] = {0};
+        int repart[ 200 * 200 ] = {0};
         for( int i=0; i<nb_sp; i++ ) {
-            if( int(round(circular_fundamental[ max_SP * temp_index + i ])) > 0 && int(round(circular_fundamental[ max_SP * temp_index + i ])) < 2 && int( round( double( 10*SNR[i] ) ) ) > 0 ) {
+            if( int(round(circular_fundamental[ max_SP * temp_index + i ])) > 0 && int(round(circular_fundamental[ max_SP * temp_index + i ])) < 200 && int( round( double( 10*SNR[i] ) ) ) > 0 ) {
                 int temp = int(round(circular_fundamental[ max_SP * temp_index + i ]));
-                repart[ int(round(circular_fundamental[ max_SP * temp_index + i ])) + 200 * ( 150-int( round( double( 10*SNR[i] ) ) ) ) ] = i;
+                repart[ int(round(circular_fundamental[ max_SP * temp_index + i ])) + 200 * ( 200 - int( round( double( 10*SNR[i] ) ) ) ) ] = 1;
 
             }
             else if( int(round(circular_fundamental[ max_SP * temp_index + i ])) < 0 )
-                printf("invalid freq measure : %i\n", int(round(circular_fundamental[ max_SP * temp_index + i ] * 30)));
+                printf("invalid freq measure : %i\n", int(round(circular_fundamental[ max_SP * temp_index + i ])));
 
         }
 
-        imagesc( "repart freq", repart, 100, 100 );
+        imagesc( "repart freq", repart, 200, 200 );
 
         CvPlot::clear("signal");
         CvPlot::plot( "signal", SNR, nb_sp );

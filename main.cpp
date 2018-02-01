@@ -149,7 +149,7 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
     int* labels = Super_Pixel->getLabels();
 
 #if visu
-    if( frame_index % 3 == 0 ) {
+    if( frame_index % 5 == 0 ) {
         printf("-frame\t%i\n", frame_index);
 
         cv::Mat* output_bounds = new cv::Mat(cvSize(width, height), CV_8UC1);
@@ -340,17 +340,26 @@ int main( int argc, char* argv[] )
     }
 
     int type;
+    //printf("file type : %i\n", sb.st_mode & S_IFMT);
+
     switch (sb.st_mode & S_IFMT) {
-        case S_IFDIR:
-            printf("directory processing\n");
-            type=0;
+    case S_IFDIR:
+        printf("directory processing\n");
+        type=0;
         break;
-        case S_IFREG:
-            printf("single file processing\n");
-            type=1;
+
+    case S_IFREG:
+        printf("single file processing\n");
+        type=1;
         break;
-        default:
-            type=-1;
+
+    case 8192:
+        printf("Device video processing\n");
+        type=1;
+        break;
+
+    default:
+        type=-1;
         break;
 
     }
