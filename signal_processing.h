@@ -19,6 +19,7 @@
 #include <gsl/gsl_fft_halfcomplex.h>
 
 #include <cvplot.h>
+#include <utils.h>
 
 #define DSP_FILTER_LOWPASS      0
 #define DSP_FILTER_HIGHPASS     1
@@ -35,7 +36,7 @@ public:
     ~Signal_processing();
 
     void add_frame( int* parent, float* c_1, float* c_2, float* c_3, int nb_SP );
-    float* get_SNR() { return SNR; }
+    float* get_SNR();
     void process();
 
 private:
@@ -46,8 +47,14 @@ private:
     float* buff_signals;
     float* circular_data;
     int* circular_parent;
+    float* circular_SNR;
     float* SNR;
+    double* circular_fundamental;
+    float* fundamental;
+
     bool ready;
+    bool complete_SNR;
+    int count_SNR;
 
     void construct_signal();
 

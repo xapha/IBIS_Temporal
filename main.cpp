@@ -22,7 +22,7 @@
 
 #define SAVE_output 0
 #define visu        1
-#define signal_size 300
+#define signal_size 600
 
 using namespace std;
 //=================================================================================
@@ -130,8 +130,6 @@ std::string get_name(const std::string& path_with_ext)
 
 void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signal, cv::Mat* img, std::string output_basename, int frame_index ) {
 
-    printf("-frame\t%i\n", frame_index);
-
     int width = img->cols;
     int height = img->rows;
     int size = width * height;
@@ -152,6 +150,7 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
 #if visu
     if( frame_index % 3 == 0 ) {
+        printf("-frame\t%i\n", frame_index);
 
         cv::Mat* output_bounds = new cv::Mat(cvSize(width, height), CV_8UC1);
         const int color = 0xFFFFFFFF;
@@ -161,8 +160,8 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
         DrawContoursAroundSegments(ubuff, labels, width, height, color);
 
-        cv::imshow( std::string("Ibis segmentation"), *output_bounds );
-        cv::waitKey( 1 );
+        //cv::imshow( std::string("Ibis segmentation"), *output_bounds );
+        //cv::waitKey( 1 );
 
         //imagesc( "labels", labels, width, height );
 
@@ -201,22 +200,31 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
             if (sp >= 0) {
                 if( frame_index > signal_size ) {
                     if( SNR[ labels[ii] ] > 0 && ubuff[ ii ] == 255 ) {
-                        pImg->ptr()[i + 2]      = 255;//(unsigned char)(10*SNR[ labels[ii] ]);
-                        pImg->ptr()[i + 1]      = 0;//(unsigned char)(10*SNR[ labels[ii] ]);
-                        pImg->ptr()[i]      = 0;//(unsigned char)(10*SNR[ labels[ii] ]);
+                        if( SNR[ labels[ii] ] > 5 )
+                            pImg->ptr()[i + 2]  = 255;
+                        else
+                            pImg->ptr()[i + 2]  = (unsigned char)(255 * SNR[ labels[ii] ] / 5 );
+                        pImg->ptr()[i + 1]  = 0;
+                        pImg->ptr()[i]      = 0;
 
                     }
+                    /*else if( SNR[ labels[ii] ] <= 0 && ubuff[ ii ] == 255 ) {
+                        pImg->ptr()[i + 2]  = 255;
+                        pImg->ptr()[i + 1]  = 255;
+                        pImg->ptr()[i]      = 255;
+
+                    }*/
                     else {
-                        pImg->ptr()[i + 2]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
+                        pImg->ptr()[i + 2]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
                         pImg->ptr()[i + 1]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
-                        pImg->ptr()[i]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
+                        pImg->ptr()[i]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
                     }
 
                 }
                 else {
-                    pImg->ptr()[i + 2]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
+                    pImg->ptr()[i + 2]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
                     pImg->ptr()[i + 1]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
-                    pImg->ptr()[i]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
+                    pImg->ptr()[i]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
 
                 }
 

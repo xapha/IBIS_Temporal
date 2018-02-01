@@ -5,15 +5,21 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     size_signals = size_signal;
     max_SP = MaxSP;
     index_circular = 0;
+    count_SNR = 0;
     ready=false;
+    complete_SNR=false;
 
     buff_signals = new float[ max_SP * size_signals ];
     circular_data = new float[ max_SP * size_signals ];
     circular_parent = new int[ max_SP * size_signals ];
+    circular_SNR = new float[ max_SP * size_signals ];
+    circular_fundamental = new double[ max_SP * size_signals ];
+    fundamental = new float[ max_SP ];
     SNR = new float[ max_SP ];
 
     memset(buff_signals, 0, sizeof(float) * max_SP * size_signals );
     memset(circular_data, 0, sizeof(float) * max_SP * size_signals );
+    memset(circular_SNR, 0, sizeof(float) * max_SP * size_signals );
     memset(circular_parent, 0, sizeof(int) * max_SP * size_signals );
 
 }
@@ -22,6 +28,9 @@ Signal_processing::~Signal_processing() {
     delete[] buff_signals;
     delete[] circular_data;
     delete[] circular_parent;
+    delete[] circular_SNR;
+    delete[] circular_fundamental;
+    delete[] fundamental;
     delete[] SNR;
 
 }
@@ -30,6 +39,10 @@ void Signal_processing::process() {
     // construct signals based on inheritance table
     if( ready ) {
         construct_signal();
+        int temp_index = index_circular - 1;
+        if( temp_index < 0 )
+            temp_index += size_signals;
+
         float* signal = new float[ size_signals ];
         float* output = new float[ size_signals ];
         double* fft_data = new double[ size_signals ];
@@ -59,14 +72,40 @@ void Signal_processing::process() {
             for( int j=0; j<size_signals; j++ )
                 fft_data[j] *= fft_data[j];
 
+            // get fundamental freq
+            circular_fundamental[ max_SP * temp_index + i ] = gsl_stats_max_index( fft_data, 1, size_signals ) / 30 * 100;
             // get SNR value
-            SNR[i] = compute_SNR(fft_data, size_signals, 7, 2, 0);
+            circular_SNR[ max_SP * temp_index + i ] = compute_SNR(fft_data, size_signals, 5, 2, 0);
+            SNR[i] += circular_SNR[ max_SP * temp_index + i ];
+
 
         }
 
-        /*CvPlot::clear("signal");
+        if( count_SNR < size_signals )
+            count_SNR++;
+
+        for( int i=0; i<nb_sp; i++ ) {
+            SNR[i] /= count_SNR;
+
+        }
+
+        int repart[ 200 * 150 ] = {0};
+        for( int i=0; i<nb_sp; i++ ) {
+            if( int(round(circular_fundamental[ max_SP * temp_index + i ])) > 0 && int(round(circular_fundamental[ max_SP * temp_index + i ])) < 2 && int( round( double( 10*SNR[i] ) ) ) > 0 ) {
+                int temp = int(round(circular_fundamental[ max_SP * temp_index + i ]));
+                repart[ int(round(circular_fundamental[ max_SP * temp_index + i ])) + 200 * ( 150-int( round( double( 10*SNR[i] ) ) ) ) ] = i;
+
+            }
+            else if( int(round(circular_fundamental[ max_SP * temp_index + i ])) < 0 )
+                printf("invalid freq measure : %i\n", int(round(circular_fundamental[ max_SP * temp_index + i ] * 30)));
+
+        }
+
+        imagesc( "repart freq", repart, 100, 100 );
+
+        CvPlot::clear("signal");
         CvPlot::plot( "signal", SNR, nb_sp );
-        cv::waitKey( 1 );*/
+        cv::waitKey( 1 );
 
         delete[] signal;
         delete[] output;
@@ -75,6 +114,12 @@ void Signal_processing::process() {
     }
 
 }
+
+float* Signal_processing::get_SNR() {
+    return SNR;
+
+}
+
 
 void Signal_processing::add_frame( int* parent, float* c_1, float* c_2, float* c_3, int nb_SP ) {
     nb_sp = nb_SP;
@@ -97,6 +142,7 @@ void Signal_processing::add_frame( int* parent, float* c_1, float* c_2, float* c
 void Signal_processing::construct_signal() {
     int parent_index;
     int temp_index;
+    memset( SNR, 0, sizeof(float) * max_SP );
 
     for( int j=0; j<nb_sp; j++ ) {
          parent_index = j;
@@ -106,8 +152,15 @@ void Signal_processing::construct_signal() {
             if( temp_index < 0 )
                 temp_index += size_signals;
 
+            // construct signals
             buff_signals[ max_SP * ( size_signals - 1 - i ) + j ] = circular_data[ max_SP * temp_index + parent_index ];
             parent_index = circular_parent[ max_SP * temp_index + parent_index ];
+
+            // construct SNR_history
+            if( circular_SNR[ max_SP * temp_index + parent_index ] != 0 ) {
+                SNR[ j ] += circular_SNR[ max_SP * temp_index + parent_index ];
+
+            }
 
         }
 
