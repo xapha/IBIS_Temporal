@@ -20,9 +20,10 @@
 #include "utils.h"
 #include "signal_processing.h"
 
-#define SAVE_output 0
-#define visu        1
-#define signal_size 600
+#define SAVE_output         0
+#define visu                1
+#define signal_size         300
+#define signal_processing   0
 
 using namespace std;
 //=================================================================================
@@ -137,56 +138,59 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
     // process IBIS
     Super_Pixel->process( img );
 
+    int* labels = Super_Pixel->getLabels();
+
+    cv::Mat* output_bounds = new cv::Mat(cvSize(width, height), CV_8UC1);
+    const int color = 0xFFFFFFFF;
+
+    unsigned char* ubuff = output_bounds->ptr();
+    std::fill(ubuff, ubuff + (width*height), 0);
+
+    DrawContoursAroundSegments(ubuff, labels, width, height, color);
+
+    cv::Mat* pImg = new cv::Mat(cvSize(width, height), CV_8UC3);
+    float* sum_rgb = new float[Super_Pixel->getMaxSPNumber()*3];
+    int* count_px = new int[Super_Pixel->getMaxSPNumber()];
+    std::fill(sum_rgb, sum_rgb+Super_Pixel->getMaxSPNumber()*3, 0.f);
+    std::fill(count_px, count_px+Super_Pixel->getMaxSPNumber(), 0);
+
+    int ii = 0, i;
+    for (i = 0; i < 3 * size; i += 3, ii++) {
+        count_px[ labels[ii] ]++;
+        sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ] += img->ptr()[i];
+        sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ] += img->ptr()[i+1];
+        sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ] += img->ptr()[i+2];
+
+    }
+
+    float R[Super_Pixel->getMaxSPNumber()];
+    float G[Super_Pixel->getMaxSPNumber()];
+    float B[Super_Pixel->getMaxSPNumber()];
+    for (i=0; i<Super_Pixel->getMaxSPNumber(); i++) {
+        sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 0 ] /= count_px[ i ];
+        sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 1 ] /= count_px[ i ];
+        sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 2 ] /= count_px[ i ];
+
+        R[i] = sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 2 ];
+        G[i] = sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 1 ];
+        B[i] = sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 0 ];
+
+    }
+
     // signal processing
+#if signal_processing
     Signal->add_frame( Super_Pixel->get_inheritance(),
-                       Super_Pixel->get_lseeds(),
-                       Super_Pixel->get_aseeds(),
-                       Super_Pixel->get_bseeds(),
+                       R,
+                       G,
+                       B,
                        Super_Pixel->getActualSPNumber() );
 
     Signal->process();
-
-    int* labels = Super_Pixel->getLabels();
-
-#if visu
+#endif
     if( frame_index % 5 == 0 ) {
         printf("-frame\t%i\n", frame_index);
 
-        cv::Mat* output_bounds = new cv::Mat(cvSize(width, height), CV_8UC1);
-        const int color = 0xFFFFFFFF;
-
-        unsigned char* ubuff = output_bounds->ptr();
-        std::fill(ubuff, ubuff + (width*height), 0);
-
-        DrawContoursAroundSegments(ubuff, labels, width, height, color);
-
-        //cv::imshow( std::string("Ibis segmentation"), *output_bounds );
-        //cv::waitKey( 1 );
-
-        //imagesc( "labels", labels, width, height );
-
-        cv::Mat* pImg = new cv::Mat(cvSize(width, height), CV_8UC3);
-        float* sum_rgb = new float[Super_Pixel->getMaxSPNumber()*3];
-        int* count_px = new int[Super_Pixel->getMaxSPNumber()];
-        std::fill(sum_rgb, sum_rgb+Super_Pixel->getMaxSPNumber()*3, 0.f);
-        std::fill(count_px, count_px+Super_Pixel->getMaxSPNumber(), 0);
-
-        int ii = 0, i;
-        for (i = 0; i < 3 * size; i += 3, ii++) {
-            count_px[ labels[ii] ]++;
-            sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ] += img->ptr()[i];
-            sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ] += img->ptr()[i+1];
-            sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ] += img->ptr()[i+2];
-
-        }
-
-        for (i=0; i<Super_Pixel->getMaxSPNumber(); i++) {
-            sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 0 ] /= count_px[ i ];
-            sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 1 ] /= count_px[ i ];
-            sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 2 ] /= count_px[ i ];
-
-        }
-
+#if visu
         // SNR superposition
         float* SNR;
         if( frame_index > signal_size ) {
@@ -198,6 +202,12 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
             int sp = labels[ii];
 
             if (sp >= 0) {
+
+                pImg->ptr()[i + 2]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
+                pImg->ptr()[i + 1]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
+                pImg->ptr()[i]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
+
+#if signal_processing
                 if( frame_index > signal_size ) {
                     if( SNR[ labels[ii] ] > 0 && ubuff[ ii ] == 255 ) {
                         if( SNR[ labels[ii] ] > 5 )
@@ -221,16 +231,29 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
                     }
 
                 }
-                else {
-                    pImg->ptr()[i + 2]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
-                    pImg->ptr()[i + 1]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
-                    pImg->ptr()[i]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
-
-                }
+#endif
 
             }
 
         }
+
+
+#if signal_processing
+        // add text
+        char text[255] = "";
+        sprintf( text, "HR: %i", Signal->get_HR() );
+        cv::putText(*pImg, text, cv::Point(30,30),
+            cv::FONT_HERSHEY_COMPLEX_SMALL, 0.8, cv::Scalar(200,200,250), 1, CV_AA);
+
+        for( int i=0; i<Super_Pixel->getActualSPNumber(); i++ ) {
+            sprintf( text, "%i", i );
+
+            cv::putText(*pImg, text, cv::Point( int(round(double(Super_Pixel->get_Xseeds()[i]))), int(round(double(Super_Pixel->get_Yseeds()[i]))) ),
+                cv::FONT_HERSHEY_COMPLEX_SMALL, 0.6, cv::Scalar(0,0,250), 1, CV_AA);
+
+
+        }
+#endif
 
         cv::imshow("rgb mean", *pImg);
         cv::waitKey( 1 );

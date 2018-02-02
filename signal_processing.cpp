@@ -5,20 +5,32 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     size_signals = size_signal;
     max_SP = MaxSP;
     index_circular = 0;
+    HR = 0;
     count_SNR = 0;
     ready=false;
     complete_SNR=false;
 
     buff_signals = new float[ max_SP * size_signals ];
-    circular_data = new float[ max_SP * size_signals ];
+    buff_signals_c1 = new float[ max_SP * size_signals ];
+    buff_signals_c2 = new float[ max_SP * size_signals ];
+    buff_signals_c3 = new float[ max_SP * size_signals ];
+    circular_data_c1 = new float[ max_SP * size_signals ];
+    circular_data_c2 = new float[ max_SP * size_signals ];
+    circular_data_c3 = new float[ max_SP * size_signals ];
     circular_parent = new int[ max_SP * size_signals ];
     circular_SNR = new float[ max_SP * size_signals ];
     circular_fundamental = new double[ max_SP * size_signals ];
+    buff_HR = new double[ max_SP * size_signals ];
     fundamental = new float[ max_SP ];
     SNR = new float[ max_SP ];
 
     memset(buff_signals, 0, sizeof(float) * max_SP * size_signals );
-    memset(circular_data, 0, sizeof(float) * max_SP * size_signals );
+    memset(buff_signals_c1, 0, sizeof(float) * max_SP * size_signals );
+    memset(buff_signals_c2, 0, sizeof(float) * max_SP * size_signals );
+    memset(buff_signals_c3, 0, sizeof(float) * max_SP * size_signals );
+    memset(circular_data_c1, 0, sizeof(float) * max_SP * size_signals );
+    memset(circular_data_c2, 0, sizeof(float) * max_SP * size_signals );
+    memset(circular_data_c3, 0, sizeof(float) * max_SP * size_signals );
     memset(circular_SNR, 0, sizeof(float) * max_SP * size_signals );
     memset(circular_parent, 0, sizeof(int) * max_SP * size_signals );
 
@@ -26,12 +38,18 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
 
 Signal_processing::~Signal_processing() {
     delete[] buff_signals;
-    delete[] circular_data;
+    delete[] buff_signals_c1;
+    delete[] buff_signals_c2;
+    delete[] buff_signals_c3;
+    delete[] circular_data_c1;
+    delete[] circular_data_c2;
+    delete[] circular_data_c3;
     delete[] circular_parent;
     delete[] circular_SNR;
     delete[] circular_fundamental;
     delete[] fundamental;
     delete[] SNR;
+    delete[] buff_HR;
 
 }
 
@@ -44,54 +62,107 @@ void Signal_processing::process() {
             temp_index += size_signals;
 
         float* signal = new float[ size_signals ];
+        float* visu_signal = new float[ size_signals ];
         float* output = new float[ size_signals ];
         double* fft_data = new double[ size_signals ];
 
+        double* variance = new double[ nb_sp ];
+        double max_variance=0;;
+
+        for( int i=0; i<nb_sp; i++ )
+            fft_data[ i ] = double(SNR[ i ]);
+        int visu_snr = -1; //gsl_stats_max_index( fft_data, 1, nb_sp );
+
         for( int i=0; i<nb_sp; i++ ) {
-            float mean_val = 0;
+
+            // succesive HR estimation variance
+            for( int j=0; j<size_signals; j++ )
+                fft_data[ j ] = buff_HR[ max_SP * j + i ];
+
+            variance[ i ] = gsl_stats_variance( fft_data, 1, size_signals );
+            if( variance[ i ] > max_variance )
+                max_variance = variance[ i ];
 
             for( int j=0; j<size_signals; j++ ) {
                 signal[ j ] = buff_signals[ max_SP * j + i ];
-                mean_val += signal[ j ];
 
             }
-
-            for( int j=0; j<size_signals; j++ )
-                signal[ j ] -= mean_val/size_signals;
 
             signal[ 0 ] = 0.f;
 
             // filter signal
-            // filter( signal, size_signals, 30.f, output, 4, 0.4f, 4.f);
+            // filter( signal, size_signals, FS, output, 4, 0.4f, 4.f);
 
             // compute fft
             for( int j=0; j<size_signals; j++ )
                 fft_data[j] = double( signal[j] );
 
             fft(fft_data, size_signals, GSL_FFT_FORWARD);
-            for( int j=0; j<size_signals; j++ )
-                fft_data[j] *= fft_data[j];
+            for( int j=0; j<size_signals; j++ ) {
+                if( j > 0.4 / float( FS / float( size_signals ) ) && j < size_signals / 2 )
+                    fft_data[j] *= fft_data[j];
+                else
+                    fft_data[j] = 0;
+
+            }
+
+            if( i == 84 ) {
+                CvPlot::clear("filter");
+                CvPlot::plot( "filter", fft_data, size_signals );
+
+            }
 
             // get fundamental freq
             circular_fundamental[ max_SP * temp_index + i ] = double(gsl_stats_max_index( fft_data, 1, size_signals ));
-            // get SNR value
-            circular_SNR[ max_SP * temp_index + i ] = compute_SNR(fft_data, size_signals, 5, 2, 0);
-            SNR[i] += circular_SNR[ max_SP * temp_index + i ];
 
+            // get SNR value
+            float d_width = 2 / float( FS / float( size_signals ) );
+
+            if( i == visu_snr )
+                circular_SNR[ max_SP * temp_index + i ] = compute_SNR( fft_data, size_signals, int( round( d_width ) ), 2, 1 );
+            else
+                circular_SNR[ max_SP * temp_index + i ] = compute_SNR( fft_data, size_signals, int( round( d_width ) ), 2, 0 );
+
+            SNR[i] += circular_SNR[ max_SP * temp_index + i ];
 
         }
 
         if( count_SNR < size_signals )
             count_SNR++;
 
+        for( int i=0; i<nb_sp; i++ )
+            variance[ i ] = 1 - variance[ i ]/max_variance;
+
+        float max_SNR=0;
         for( int i=0; i<nb_sp; i++ ) {
-            SNR[i] /= count_SNR;
+            SNR[i] = SNR[i] / count_SNR;// * variance[i];
+
+            if( SNR[i] > max_SNR ) {
+                max_SNR = SNR[i];
+                HR = int( round(circular_fundamental[ max_SP * temp_index + i ]) * 60 * float( FS / float( size_signals ) ) );
+
+            }
+
+        }
+
+        for( int j=0; j<size_signals; j++ ) {
+            visu_signal[ j ] = buff_signals[ max_SP * j + 75 ];
+
+        }
+        visu_signal[0] = 0;
+
+        int histo_freq[size_signals] = {0};
+        for( int i=0; i<nb_sp; i++ ) {
+            if( int( round( double( 10*SNR[i] ) ) > 0 ) ) {
+                histo_freq[ int(round(circular_fundamental[ max_SP * temp_index + i ])) ] += 6*int( round( double( SNR[i] ) ) );
+
+            }
 
         }
 
         int repart[ 200 * 200 ] = {0};
         for( int i=0; i<nb_sp; i++ ) {
-            if( int(round(circular_fundamental[ max_SP * temp_index + i ])) > 0 && int(round(circular_fundamental[ max_SP * temp_index + i ])) < 200 && int( round( double( 10*SNR[i] ) ) ) > 0 ) {
+            if( int(round(circular_fundamental[ max_SP * temp_index + i ])) > 0 && int(round(circular_fundamental[ max_SP * temp_index + i ])) < 200 && int( round( double( SNR[i] ) ) ) > 0 ) {
                 int temp = int(round(circular_fundamental[ max_SP * temp_index + i ]));
                 repart[ int(round(circular_fundamental[ max_SP * temp_index + i ])) + 200 * ( 200 - int( round( double( 10*SNR[i] ) ) ) ) ] = 1;
 
@@ -103,8 +174,15 @@ void Signal_processing::process() {
 
         imagesc( "repart freq", repart, 200, 200 );
 
-        CvPlot::clear("signal");
-        CvPlot::plot( "signal", SNR, nb_sp );
+        CvPlot::clear("histo_freq");
+        CvPlot::plot( "histo_freq", histo_freq, size_signals );
+
+        CvPlot::clear("1-Variance");
+        CvPlot::plot( "1-Variance", variance, nb_sp );
+
+        CvPlot::clear("SNR");
+        CvPlot::plot( "SNR", SNR, nb_sp );
+
         cv::waitKey( 1 );
 
         delete[] signal;
@@ -125,7 +203,9 @@ void Signal_processing::add_frame( int* parent, float* c_1, float* c_2, float* c
     nb_sp = nb_SP;
 
     for( int i=0; i<nb_sp; i++ ) {
-        circular_data[ max_SP * index_circular + i ] = c_2[ i ];
+        circular_data_c1[ max_SP * index_circular + i ] = c_1[ i ];
+        circular_data_c2[ max_SP * index_circular + i ] = c_2[ i ];
+        circular_data_c3[ max_SP * index_circular + i ] = c_3[ i ];
         circular_parent[ max_SP * index_circular + i ] = parent[ i ];
 
     }
@@ -143,6 +223,7 @@ void Signal_processing::construct_signal() {
     int parent_index;
     int temp_index;
     memset( SNR, 0, sizeof(float) * max_SP );
+    float c1, c2, c3;
 
     for( int j=0; j<nb_sp; j++ ) {
          parent_index = j;
@@ -153,14 +234,75 @@ void Signal_processing::construct_signal() {
                 temp_index += size_signals;
 
             // construct signals
-            buff_signals[ max_SP * ( size_signals - 1 - i ) + j ] = circular_data[ max_SP * temp_index + parent_index ];
+            c1 = circular_data_c1[ max_SP * temp_index + parent_index ];
+            c2 = circular_data_c2[ max_SP * temp_index + parent_index ];
+            c3 = circular_data_c3[ max_SP * temp_index + parent_index ];
+
+            buff_signals_c1[ max_SP * ( size_signals - 1 - i ) + j ] = c1;
+            buff_signals_c2[ max_SP * ( size_signals - 1 - i ) + j ] = c2;
+            buff_signals_c3[ max_SP * ( size_signals - 1 - i ) + j ] = c3;
+
             parent_index = circular_parent[ max_SP * temp_index + parent_index ];
+
+            buff_HR[ max_SP * ( size_signals - 1 - i ) + j ] = circular_fundamental[ max_SP * temp_index + parent_index ];
 
             // construct SNR_history
             if( circular_SNR[ max_SP * temp_index + parent_index ] != 0 ) {
                 SNR[ j ] += circular_SNR[ max_SP * temp_index + parent_index ];
 
             }
+
+        }
+
+        // apply rPPG algo :
+        double Xf[size_signals];
+        double Yf[size_signals];
+        double alpha;
+
+        // C1, C2, C3
+        double C1[size_signals];
+        double C2[size_signals];
+        double C3[size_signals];
+
+        for(int i=0; i<size_signals; i++) {
+            C1[i] = buff_signals_c1[ max_SP * i + j ];
+            C2[i] = buff_signals_c2[ max_SP * i + j ];
+            C3[i] = buff_signals_c3[ max_SP * i + j ];
+
+        }
+
+        // normalization
+        double mean_C1 = gsl_stats_mean( C1, 1, size_signals );
+        double sd_C1 = gsl_stats_sd( C1, 1, size_signals );
+
+        double mean_C2 = gsl_stats_mean( C2, 1, size_signals );
+        double sd_C2 = gsl_stats_sd( C2, 1, size_signals );
+
+        double mean_C3 = gsl_stats_mean( C3, 1, size_signals );
+        double sd_C3 = gsl_stats_sd( C3, 1, size_signals );
+
+        for(int i=0; i<size_signals; i++) {
+            C1[i] = ( C1[i] - mean_C1 ) / sd_C1;
+            C2[i] = ( C2[i] - mean_C2 ) / sd_C2;
+            C3[i] = ( C3[i] - mean_C3 ) / sd_C3;
+
+        }
+
+
+        //Xs && Ys
+        for(int i=0; i<size_signals; i++) {
+            Xf[i] = 3*C1[i]-2*C2[i];
+            Yf[i] = 1.5*C1[i]-1.5*C3[i];
+
+        }
+
+        double std_xf = gsl_stats_sd(Xf, 1, size_signals);
+        double std_yf = gsl_stats_sd(Yf, 1, size_signals);
+
+        alpha = std_xf / std_yf;
+
+        for( int i=0; i<size_signals-1; i++ ) {
+            buff_signals[ max_SP * i + j ] = float( Xf[i] - alpha*Yf[i] );
 
         }
 

@@ -583,7 +583,7 @@ void IBIS::process( cv::Mat* img ) {
     lap = now_ms();
 #endif
 
-    //enforceConnectivity();
+    // enforceConnectivity();
 
     // propag
     if( index_frame > 0 ) {

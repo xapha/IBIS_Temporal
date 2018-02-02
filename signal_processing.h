@@ -29,6 +29,8 @@
 #define GSL_FFT_FORWARD 1
 #define GSL_FFT_REVERSE 2
 
+#define FS 30
+
 class Signal_processing
 {
 public:
@@ -37,6 +39,7 @@ public:
 
     void add_frame( int* parent, float* c_1, float* c_2, float* c_3, int nb_SP );
     float* get_SNR();
+    int get_HR() { return HR; }
     void process();
 
 private:
@@ -44,11 +47,18 @@ private:
     int max_SP;
     int nb_sp;
     int index_circular;
+    int HR;
     float* buff_signals;
-    float* circular_data;
+    float* buff_signals_c1;
+    float* buff_signals_c2;
+    float* buff_signals_c3;
+    float* circular_data_c1;
+    float* circular_data_c2;
+    float* circular_data_c3;
     int* circular_parent;
     float* circular_SNR;
     float* SNR;
+    double* buff_HR;
     double* circular_fundamental;
     float* fundamental;
 
