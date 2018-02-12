@@ -20,10 +20,10 @@
 #include "utils.h"
 #include "signal_processing.h"
 
-#define SAVE_output         0
+#define SAVE_output         1
 #define visu                1
-#define signal_size         300
-#define signal_processing   0
+#define signal_size         600
+#define signal_processing   1
 
 using namespace std;
 //=================================================================================
@@ -121,11 +121,52 @@ void write_labels(IplImage* input, const std::string& output_labels)
     file.close();
 }
 
+void write_traces(float* C1, float* C2, float* C3, const std::string& output_labels, IBIS* SP)
+{
+    std::ofstream file;
+    file.open(output_labels.c_str());
+    int max_sp = SP->getMaxSPNumber();
+
+    for (int y=0 ; y<SP->getActualSPNumber() ; y++)
+    {
+        for (int x=0 ; x<signal_size-1 ; x++)
+        {
+            file << (double) C1[x*max_sp + y] << " ";
+            file << (double) C2[x*max_sp + y] << " ";
+            file << (double) C3[x*max_sp + y] << " ";
+
+        }
+        file << (double) C1[(signal_size-1)*max_sp + y] << " ";
+        file << (double) C2[(signal_size-1)*max_sp + y] << " ";
+        file << (double) C2[(signal_size-1)*max_sp + y] << std::endl;
+
+    }
+
+    file.close();
+}
+
 std::string get_name(const std::string& path_with_ext)
 {
     int deb = path_with_ext.find_last_of("/");
-    int fin = path_with_ext.find_last_of(".");
-    return path_with_ext.substr(deb+1, fin-deb-1);
+    /*int fin = path_with_ext.find_last_of(".");
+    return path_with_ext.substr(deb+1, fin-deb-1);*/
+
+    std::string Str1("subject");
+    std::string Str2("-gt");
+
+    std::size_t found_1 = path_with_ext.find(Str1);
+    std::size_t found_2 = path_with_ext.find(Str2);
+
+    if( found_1 != std::string::npos ) {
+        // dataset IUT
+        return path_with_ext.substr(found_1, found_1 + deb);
+
+    }
+    else if( found_2 != std::string::npos ) {
+        // dataset Le2i
+        return path_with_ext.substr(found_2-2, found_2 + deb);
+
+    }
 
 }
 
@@ -187,8 +228,9 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
     Signal->process();
 #endif
-    if( frame_index % 5 == 0 ) {
-        printf("-frame\t%i\n", frame_index);
+    if( frame_index % 1 == 0 ) {
+        if( frame_index % 5 == 0 )
+            printf("-frame\t%i\n", frame_index);
 
 #if visu
         // SNR superposition
@@ -203,9 +245,16 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
             if (sp >= 0) {
 
-                pImg->ptr()[i + 2]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
-                pImg->ptr()[i + 1]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
-                pImg->ptr()[i]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
+                pImg->ptr()[i + 2]  = (unsigned char) img->ptr()[i+2]; //(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
+                pImg->ptr()[i + 1]  = (unsigned char) img->ptr()[i+1]; //(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
+                pImg->ptr()[i]      = (unsigned char) img->ptr()[i+0]; //(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
+
+                if( ubuff[ ii ] == 255 ) {
+                    pImg->ptr()[i + 2]  = 255;
+                    pImg->ptr()[i + 1]  = 255;
+                    pImg->ptr()[i]      = 255;
+
+                }
 
 #if signal_processing
                 if( frame_index > signal_size ) {
@@ -218,17 +267,6 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
                         pImg->ptr()[i]      = 0;
 
                     }
-                    /*else if( SNR[ labels[ii] ] <= 0 && ubuff[ ii ] == 255 ) {
-                        pImg->ptr()[i + 2]  = 255;
-                        pImg->ptr()[i + 1]  = 255;
-                        pImg->ptr()[i]      = 255;
-
-                    }*/
-                    else {
-                        pImg->ptr()[i + 2]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
-                        pImg->ptr()[i + 1]  = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
-                        pImg->ptr()[i]      = (unsigned char)(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
-                    }
 
                 }
 #endif
@@ -238,7 +276,7 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
         }
 
 
-#if signal_processing
+//#if signal_processing
         // add text
         char text[255] = "";
         sprintf( text, "HR: %i", Signal->get_HR() );
@@ -253,10 +291,13 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
 
         }
-#endif
+//#endif
 
         cv::imshow("rgb mean", *pImg);
-        cv::waitKey( 1 );
+        /*if( frame_index > signal_size )
+            cv::waitKey( 0 );
+        else*/
+            cv::waitKey( 1 );
 
         delete[] sum_rgb;
         delete[] count_px;
@@ -265,39 +306,26 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
     }
 #endif
-#if SAVE_output
-    const int width = img->cols;
-    const int height = img->rows;
-    const int color = 0xFFFFFFFF;
-    //std::string output_labels = get_name(output_basename);
     char output_labels[255] = {0};
-    sprintf(output_labels, "results/frame_%i.seg", frame_index);
+    sprintf(output_labels, "results/%s/traces_%04i.seg", output_basename.c_str(), frame_index);
 
-    ofstream outfile;
-    outfile.open(output_labels);
-    for (int y=0 ; y<height ; y++)
-    {
-        for (int x=0 ; x<width-1 ; x++)
-        {
-            outfile << labels[y*width + x] << " ";
-        }
-        outfile << labels[y*width + width-1] << std::endl;
-    }
-    outfile.close();
+    //write_traces( Signal->get_C1(), Signal->get_C2(), Signal->get_C3(), output_labels, Super_Pixel );
 
-    IplImage* output_bounds_alpha = cvCreateImage(cvSize(width, height), IPL_DEPTH_8U, 4);
-    cvSet(output_bounds_alpha, cvScalar(0,0,0,0));
-    IplImage* output_bounds = cvCreateImage(cvSize(width, height), IPL_DEPTH_8U, 3);
-    unsigned int* ubuff = (unsigned int*)output_bounds_alpha->imageData;
-    DrawContoursAroundSegments(ubuff, labels, width, height, color);
+#if SAVE_output
+    sprintf(output_labels, "results/%s/frame_%i.seg", output_basename.c_str(), frame_index);
 
-    cvCvtColor(output_bounds_alpha, output_bounds, CV_RGBA2RGB);
-    sprintf(output_labels, "results/frame_%i_boundary.png", frame_index);
+//    ofstream outfile;
+//    outfile.open(output_labels);
+//    for (int y=0 ; y<height ; y++)
+//    {
+//        for (int x=0 ; x<width-1 ; x++)
+//        {
+//            outfile << labels[y*width + x] << " ";
+//        }
+//        outfile << labels[y*width + width-1] << std::endl;
+//    }
+//    outfile.close();
 
-    cvSaveImage(output_labels, output_bounds);
-
-    cvReleaseImage(&output_bounds_alpha);
-    cvReleaseImage(&output_bounds);
 #endif
 
 }
@@ -378,7 +406,7 @@ int main( int argc, char* argv[] )
 
     case 8192:
         printf("Device video processing\n");
-        type=1;
+        type=2;
         break;
 
     default:
@@ -389,7 +417,7 @@ int main( int argc, char* argv[] )
 
     if( type == -1 )
         exit(EXIT_SUCCESS);
-    else if( type == 1 ) {
+    else if( type >= 1 ) {
         // IBIS
         IBIS Super_Pixel( K, compa );
         Signal_processing Signal( K, signal_size );
@@ -404,8 +432,17 @@ int main( int argc, char* argv[] )
 
         cv::Mat img;
         int ii=0;
+        std::string output_basename = get_name( argv[3] );
+
+        /*if( type == 1 ) {
+            char command[255] = {0};
+            sprintf( command, "mkdir -p results/%s\n", output_basename.c_str() );
+            system( command );
+
+        }*/
+
         while( video.read( img ) ) {
-            execute_IBIS( K, compa, &Super_Pixel, &Signal, &img, argv[ 3 ], ii );
+            execute_IBIS( K, compa, &Super_Pixel, &Signal, &img, output_basename, ii );
             ii++;
 
         }
@@ -421,7 +458,7 @@ int main( int argc, char* argv[] )
 
         }
 
-        printf(" %i image(s) found\n", n);
+        printf(" %i file(s) identified\n", n);
         if( n == 0 )
             exit(EXIT_SUCCESS);
 

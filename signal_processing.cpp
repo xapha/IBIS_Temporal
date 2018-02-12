@@ -23,6 +23,7 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     buff_HR = new double[ max_SP * size_signals ];
     fundamental = new float[ max_SP ];
     SNR = new float[ max_SP ];
+    HR_final = new int[ size_signals ];
 
     memset(buff_signals, 0, sizeof(float) * max_SP * size_signals );
     memset(buff_signals_c1, 0, sizeof(float) * max_SP * size_signals );
@@ -33,6 +34,7 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     memset(circular_data_c3, 0, sizeof(float) * max_SP * size_signals );
     memset(circular_SNR, 0, sizeof(float) * max_SP * size_signals );
     memset(circular_parent, 0, sizeof(int) * max_SP * size_signals );
+    memset(HR_final, 0, sizeof(int) * size_signals );
 
 }
 
@@ -50,6 +52,7 @@ Signal_processing::~Signal_processing() {
     delete[] fundamental;
     delete[] SNR;
     delete[] buff_HR;
+    delete[] HR_final;
 
 }
 
@@ -57,6 +60,7 @@ void Signal_processing::process() {
     // construct signals based on inheritance table
     if( ready ) {
         construct_signal();
+
         int temp_index = index_circular - 1;
         if( temp_index < 0 )
             temp_index += size_signals;
@@ -65,6 +69,7 @@ void Signal_processing::process() {
         float* visu_signal = new float[ size_signals ];
         float* output = new float[ size_signals ];
         double* fft_data = new double[ size_signals ];
+        double* fft_buff = new double[ size_signals * nb_sp ];
 
         double* variance = new double[ nb_sp ];
         double max_variance=0;;
@@ -91,39 +96,36 @@ void Signal_processing::process() {
             signal[ 0 ] = 0.f;
 
             // filter signal
-            // filter( signal, size_signals, FS, output, 4, 0.4f, 4.f);
+            filter( signal, size_signals, FS, output, 4, 0.4f, 4.f);
 
             // compute fft
             for( int j=0; j<size_signals; j++ )
-                fft_data[j] = double( signal[j] );
+                fft_data[j] = double( output[j] );
 
             fft(fft_data, size_signals, GSL_FFT_FORWARD);
             for( int j=0; j<size_signals; j++ ) {
-                if( j > 0.4 / float( FS / float( size_signals ) ) && j < size_signals / 2 )
+                if( j > 0.4 * 2 / float( FS / float( size_signals ) ) && j < 4 * 2 / float( FS / float( size_signals ) ) )
                     fft_data[j] *= fft_data[j];
                 else
                     fft_data[j] = 0;
 
             }
 
-            if( i == 84 ) {
-                CvPlot::clear("filter");
-                CvPlot::plot( "filter", fft_data, size_signals );
-
-            }
+            for( int j=0; j<size_signals; j++ )
+                fft_buff[ nb_sp * j + i ] = fft_data[ j ];
 
             // get fundamental freq
             circular_fundamental[ max_SP * temp_index + i ] = double(gsl_stats_max_index( fft_data, 1, size_signals ));
 
             // get SNR value
-            float d_width = 2 / float( FS / float( size_signals ) );
+            float d_width = 0.35 * 2 / float( FS / float( size_signals ) );
 
             if( i == visu_snr )
                 circular_SNR[ max_SP * temp_index + i ] = compute_SNR( fft_data, size_signals, int( round( d_width ) ), 2, 1 );
             else
                 circular_SNR[ max_SP * temp_index + i ] = compute_SNR( fft_data, size_signals, int( round( d_width ) ), 2, 0 );
 
-            SNR[i] += circular_SNR[ max_SP * temp_index + i ];
+            SNR[i] = circular_SNR[ max_SP * temp_index + i ];
 
         }
 
@@ -134,16 +136,66 @@ void Signal_processing::process() {
             variance[ i ] = 1 - variance[ i ]/max_variance;
 
         float max_SNR=0;
+        float weight[nb_sp] = {0.f};
+        float sum_weight=0.f;
         for( int i=0; i<nb_sp; i++ ) {
-            SNR[i] = SNR[i] / count_SNR;// * variance[i];
+            //SNR[i] = SNR[i] / count_SNR;// * variance[i];
 
-            if( SNR[i] > max_SNR ) {
+            weight[i] = pow( 10.0, double(SNR[i])/6 );
+            sum_weight += weight[i];
+
+            /*if( SNR[i] > max_SNR ) {
                 max_SNR = SNR[i];
-                HR = int( round(circular_fundamental[ max_SP * temp_index + i ]) * 60 * float( FS / float( size_signals ) ) );
+                HR = int( round(circular_fundamental[ max_SP * temp_index + i ]) * 30.f * float( FS / float( size_signals ) ) );
+
+            }*/
+
+        }
+
+        memset( fft_data, 0, sizeof(double)*size_signals );
+        /*for( int i=0; i<nb_sp; i++ ) {
+            for( int j=0; j<size_signals; j++ ) {
+                signal[ j ] = buff_signals[ max_SP * j + i ];
+
+            }
+
+            signal[ 0 ] = 0.f;
+
+            // filter signal
+            filter( signal, size_signals, FS, output, 4, 0.4f, 4.f);
+
+            for( int j=0; j<size_signals; j++ ) {
+                if( SNR[i] > 0 )
+                    fft_data[j] = output[j] * ( weight[i] / sum_weight );
+
+                }
+
+        }*/
+
+        for( int i=0; i<nb_sp; i++ ) {
+            for( int j=0; j<size_signals; j++ ) {
+                if( SNR[i] > 0 ) {
+                    fft_data[j] += SNR[i] * fft_buff[ nb_sp * j + i ];
+
+                }
 
             }
 
         }
+
+        /*fft(fft_data, size_signals, GSL_FFT_FORWARD);
+        for( int j=0; j<size_signals; j++ ) {
+            if( j > 0.4 * 2 / float( FS / float( size_signals ) ) && j < 3 * 2 / float( FS / float( size_signals ) ) )
+                fft_data[j] *= fft_data[j];
+            else
+                fft_data[j] = 0;
+
+        }*/
+
+        CvPlot::clear("fft");
+        CvPlot::plot( "fft", fft_data, size_signals );
+
+        HR = round( float(gsl_stats_max_index( fft_data, 1, size_signals )) * 30.f * float( FS / float( size_signals ) ) );
 
         for( int j=0; j<size_signals; j++ ) {
             visu_signal[ j ] = buff_signals[ max_SP * j + 75 ];
@@ -183,11 +235,21 @@ void Signal_processing::process() {
         CvPlot::clear("SNR");
         CvPlot::plot( "SNR", SNR, nb_sp );
 
+        for( int j=1; j<size_signals-2; j++ )
+            HR_final[j] = HR_final[j+1];
+
+        HR_final[ size_signals-2 ] = HR;
+        HR_final[ 0 ] = 40;
+        HR_final[ size_signals-1 ] = 140;
+        CvPlot::clear("HR");
+        CvPlot::plot( "HR", HR_final, size_signals );
+
         cv::waitKey( 1 );
 
         delete[] signal;
         delete[] output;
         delete[] fft_data;
+        delete[] fft_buff;
 
     }
 
@@ -288,11 +350,10 @@ void Signal_processing::construct_signal() {
 
         }
 
-
         //Xs && Ys
         for(int i=0; i<size_signals; i++) {
             Xf[i] = 3*C1[i]-2*C2[i];
-            Yf[i] = 1.5*C1[i]-1.5*C3[i];
+            Yf[i] = 1.5*C1[i]+C2[i]-1.5*C3[i];
 
         }
 

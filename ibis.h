@@ -66,12 +66,15 @@ protected:
     void initSeeds();
     void mask_propagate_SP();
     void mean_seeds();
+    void assure_contiguity();
+    void global_mean_seeds();
 
     double now_ms(void);
     void enforceConnectivity();
 
     // temporal
     void diff_frame();
+    bool creation_deletion();
 
 private:
 
@@ -86,7 +89,11 @@ private:
         int* last_px_xy;
         int* last_parent;
         int* limit_value_fill;
+        int* adjacent_mask;
+        int* spotted_sp;
 
+        int count_spotted_sp;
+        int count_adjacent_mask;
         int count_var;
         int count_last;
         int count_last_parent;
@@ -96,7 +103,9 @@ private:
         int size;
         int mask_index;
         int angular;
+        int count_SP;
         bool filled;
+        bool top_mask;
 
         MASK* sub_mask;
         IBIS* IBIS_data;
@@ -111,7 +120,7 @@ private:
         }
         ~MASK();
 
-        void init(int size_in, int y_in, int x_in , int mask_level, IBIS *ptr_IBIS);
+        void init(int size_in, int y_in, int x_in , int mask_level, IBIS *ptr_IBIS, int* adjacent=NULL);
         void reset();
         void process( int mask_level );
         int assign_px(int y, int x, int index_xy);
@@ -121,6 +130,13 @@ private:
         bool angular_assign();
         void assign_labels( int x, int y, int index_xy, int value );
         void get_chrono( float* times );
+        int get_list_sp();
+        int get_adj_mask();
+        int* get_spotted() { return spotted_sp; }
+        int* get_mask() { return adjacent_mask; }
+
+    protected:
+        void list_sp();
 
     };
 
@@ -147,6 +163,7 @@ private:
     float* aseeds_Sum;
     float* bseeds_Sum;
     float* countPx;
+    bool* updated_px;
 
     // inner parameter
     int count_mask;
@@ -195,9 +212,11 @@ private:
     bool img_bis;
 
     // difference between frame
+    bool reset_state;
     int index_frame;
     int* count_diff;
     int* inheritance;
+    int* elligible;
 
 public:
     double st2, st3, st4;

@@ -42,6 +42,10 @@ public:
     int get_HR() { return HR; }
     void process();
 
+    float* get_C1() { return buff_signals_c1; }
+    float* get_C2() { return buff_signals_c2; }
+    float* get_C3() { return buff_signals_c3; }
+
 private:
     int size_signals;
     int max_SP;
@@ -59,6 +63,7 @@ private:
     float* circular_SNR;
     float* SNR;
     double* buff_HR;
+    int* HR_final;
     double* circular_fundamental;
     float* fundamental;
 
