@@ -269,6 +269,7 @@ void IBIS::enforceConnectivity() {
         {
             if (nlabels[oindex] < 0)
             {
+                label = labels[ oindex ];
                 nlabels[oindex] = label;// !! labels[oindex] --> label
 
                 x_vec[0] = k;
@@ -327,8 +328,6 @@ void IBIS::enforceConnectivity() {
 
     for (i = 0; i < size; i++)
         labels[i] = nlabels[i];
-
-    //SPNumber = label-1;
 
     delete[] nlabels;
 
@@ -454,8 +453,13 @@ void IBIS::reset() {
     st3 = 0;
 
     std::fill( countPx, countPx + maxSPNumber, 0 );
+
+
+#if !fixed_background
     std::fill( elligible, elligible + size, 0 );
     std::fill( labels, labels + size, -1 );
+
+#endif
 
     if( index_frame == 0 ) {
         for( int i=0; i < SPNumber; i++ ) {
@@ -606,22 +610,17 @@ void IBIS::process( cv::Mat* img ) {
 
         // convert to Lab
         getLAB( img );
-
         index_frame = 0;
 
     }
     else {
         // convert to Lab
         getLAB( img );
-
         index_frame++;
-        /*memcpy(Xseeds_prev, Xseeds, sizeof(float)*maxSPNumber);
-        memcpy(Yseeds_prev, Yseeds, sizeof(float)*maxSPNumber);
-        memcpy(lseeds_prev, lseeds, sizeof(float)*maxSPNumber);
-        memcpy(aseeds_prev, aseeds, sizeof(float)*maxSPNumber);
-        memcpy(bseeds_prev, bseeds, sizeof(float)*maxSPNumber);*/
 
-        //diff_frame();
+#if fixed_background
+        diff_frame();
+#endif
 
         //imagesc( "elligible SP", elligible, width, height );
         //cv::waitKey(1);
@@ -634,7 +633,6 @@ void IBIS::process( cv::Mat* img ) {
 #endif
 
     reset();
-
     mask_propagate_SP();
 
 #if OUTPUT_log
@@ -652,10 +650,11 @@ void IBIS::process( cv::Mat* img ) {
     imagesc("refined labels", labels, width, height);
     cv::waitKey(0);*/
 
-    //enforceConnectivity();
-    //global_mean_seeds();
-
+    enforceConnectivity();
     assure_contiguity();
+
+    global_mean_seeds();
+
     memcpy( initial_repartition, labels, sizeof(int) * size );
 
     if( creation_deletion() ) {
@@ -963,7 +962,7 @@ void IBIS::diff_frame() {
     float sensitivity_limit;
 
     int sensitivity = 10;
-    int inertia = 10;
+    int inertia = 5;
 
     std::fill( count_diff, count_diff + SPNumber, 0 );
     std::fill( elligible, elligible + size, 0 );

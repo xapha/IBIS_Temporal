@@ -104,7 +104,7 @@ void Signal_processing::process() {
 
             fft(fft_data, size_signals, GSL_FFT_FORWARD);
             for( int j=0; j<size_signals; j++ ) {
-                if( j > 0.4 * 2 / float( FS / float( size_signals ) ) && j < 4 * 2 / float( FS / float( size_signals ) ) )
+                if( j > 0.8 * 2 / float( FS / float( size_signals ) ) && j < 4 * 2 / float( FS / float( size_signals ) ) )
                     fft_data[j] *= fft_data[j];
                 else
                     fft_data[j] = 0;
@@ -118,14 +118,14 @@ void Signal_processing::process() {
             circular_fundamental[ max_SP * temp_index + i ] = double(gsl_stats_max_index( fft_data, 1, size_signals ));
 
             // get SNR value
-            float d_width = 0.35 * 2 / float( FS / float( size_signals ) );
+            float d_width = 0.5 * 2 / float( FS / float( size_signals ) );
 
             if( i == visu_snr )
                 circular_SNR[ max_SP * temp_index + i ] = compute_SNR( fft_data, size_signals, int( round( d_width ) ), 2, 1 );
             else
                 circular_SNR[ max_SP * temp_index + i ] = compute_SNR( fft_data, size_signals, int( round( d_width ) ), 2, 0 );
 
-            SNR[i] = circular_SNR[ max_SP * temp_index + i ];
+            SNR[i] += circular_SNR[ max_SP * temp_index + i ];
 
         }
 
@@ -139,7 +139,7 @@ void Signal_processing::process() {
         float weight[nb_sp] = {0.f};
         float sum_weight=0.f;
         for( int i=0; i<nb_sp; i++ ) {
-            //SNR[i] = SNR[i] / count_SNR;// * variance[i];
+            SNR[i] = SNR[i] / count_SNR;// * variance[i];
 
             weight[i] = pow( 10.0, double(SNR[i])/6 );
             sum_weight += weight[i];
@@ -265,9 +265,21 @@ void Signal_processing::add_frame( int* parent, float* c_1, float* c_2, float* c
     nb_sp = nb_SP;
 
     for( int i=0; i<nb_sp; i++ ) {
-        circular_data_c1[ max_SP * index_circular + i ] = c_1[ i ];
-        circular_data_c2[ max_SP * index_circular + i ] = c_2[ i ];
-        circular_data_c3[ max_SP * index_circular + i ] = c_3[ i ];
+        if( parent[ i ] == i ) {
+            circular_data_c1[ max_SP * index_circular + i ] = c_1[ i ];
+            circular_data_c2[ max_SP * index_circular + i ] = c_2[ i ];
+            circular_data_c3[ max_SP * index_circular + i ] = c_3[ i ];
+
+        }
+        else {
+            for( int j=0; j<size_signals-1; j++ ) {
+                circular_data_c1[ max_SP * j + i ] = circular_data_c1[ max_SP * j + parent[ i ] ];
+                circular_data_c2[ max_SP * j + i ] = circular_data_c2[ max_SP * j + parent[ i ] ];
+                circular_data_c3[ max_SP * j + i ] = circular_data_c3[ max_SP * j + parent[ i ] ];
+
+            }
+
+        }
         circular_parent[ max_SP * index_circular + i ] = parent[ i ];
 
     }
@@ -296,9 +308,13 @@ void Signal_processing::construct_signal() {
                 temp_index += size_signals;
 
             // construct signals
-            c1 = circular_data_c1[ max_SP * temp_index + parent_index ];
+            /*c1 = circular_data_c1[ max_SP * temp_index + parent_index ];
             c2 = circular_data_c2[ max_SP * temp_index + parent_index ];
-            c3 = circular_data_c3[ max_SP * temp_index + parent_index ];
+            c3 = circular_data_c3[ max_SP * temp_index + parent_index ];*/
+
+            c1 = circular_data_c1[ max_SP * temp_index + j ];
+            c2 = circular_data_c2[ max_SP * temp_index + j ];
+            c3 = circular_data_c3[ max_SP * temp_index + j ];
 
             buff_signals_c1[ max_SP * ( size_signals - 1 - i ) + j ] = c1;
             buff_signals_c2[ max_SP * ( size_signals - 1 - i ) + j ] = c2;
