@@ -23,7 +23,7 @@
 #define SAVE_output         1
 #define visu                1
 #define signal_size         600
-#define signal_processing   1
+#define signal_processing   0
 
 using namespace std;
 //=================================================================================
@@ -129,7 +129,7 @@ void write_traces(float* C1, float* C2, float* C3, const std::string& output_lab
 
     for (int y=0 ; y<SP->getActualSPNumber() ; y++)
     {
-        for (int x=0 ; x<signal_size-1 ; x++)
+        /*for (int x=0 ; x<signal_size-1 ; x++)
         {
             file << (double) C1[x*max_sp + y] << " ";
             file << (double) C2[x*max_sp + y] << " ";
@@ -138,7 +138,11 @@ void write_traces(float* C1, float* C2, float* C3, const std::string& output_lab
         }
         file << (double) C1[(signal_size-1)*max_sp + y] << " ";
         file << (double) C2[(signal_size-1)*max_sp + y] << " ";
-        file << (double) C2[(signal_size-1)*max_sp + y] << std::endl;
+        file << (double) C3[(signal_size-1)*max_sp + y] << std::endl;*/
+
+        file << (double) C1[y] << " ";
+        file << (double) C2[y] << " ";
+        file << (double) C3[y] << std::endl;
 
     }
 
@@ -249,6 +253,10 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
                 pImg->ptr()[i + 1]  = (unsigned char) img->ptr()[i+1]; //(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
                 pImg->ptr()[i]      = (unsigned char) img->ptr()[i+0]; //(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
 
+                /*pImg->ptr()[i + 2]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
+                pImg->ptr()[i + 1]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
+                pImg->ptr()[i]      = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);*/
+
                 if( ubuff[ ii ] == 255 ) {
                     pImg->ptr()[i + 2]  = 255;
                     pImg->ptr()[i + 1]  = 255;
@@ -263,6 +271,7 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
                             pImg->ptr()[i + 2]  = 255;
                         else
                             pImg->ptr()[i + 2]  = (unsigned char)(255 * SNR[ labels[ii] ] / 5 );
+
                         pImg->ptr()[i + 1]  = 0;
                         pImg->ptr()[i]      = 0;
 
@@ -306,25 +315,35 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
     }
 #endif
-    char output_labels[255] = {0};
-    sprintf(output_labels, "results/%s/traces_%04i.seg", output_basename.c_str(), frame_index);
-
-    //write_traces( Signal->get_C1(), Signal->get_C2(), Signal->get_C3(), output_labels, Super_Pixel );
 
 #if SAVE_output
-    sprintf(output_labels, "results/%s/frame_%i.seg", output_basename.c_str(), frame_index);
+    char output_labels[255] = {0};
+    sprintf(output_labels, "results/%s/traces_%04i.seg", output_basename.c_str(), frame_index);
+    write_traces( R, G, B, output_labels, Super_Pixel );
 
-//    ofstream outfile;
-//    outfile.open(output_labels);
-//    for (int y=0 ; y<height ; y++)
-//    {
-//        for (int x=0 ; x<width-1 ; x++)
-//        {
-//            outfile << labels[y*width + x] << " ";
-//        }
-//        outfile << labels[y*width + width-1] << std::endl;
-//    }
-//    outfile.close();
+    sprintf(output_labels, "results/%s/parent_%04i.seg", output_basename.c_str(), frame_index);
+
+    std::ofstream file;
+    file.open(output_labels);
+    int* parent = Super_Pixel->get_inheritance();
+
+    for (int y=0; y<Super_Pixel->getActualSPNumber(); y++)
+        file << parent[y] << std::endl;
+
+    file.close();
+
+    /*sprintf(output_labels, "results/%s/frame_%i.seg", output_basename.c_str(), frame_index);
+    ofstream outfile;
+    outfile.open(output_labels);
+    for (int y=0 ; y<height ; y++)
+    {
+        for (int x=0 ; x<width-1 ; x++)
+        {
+            outfile << labels[y*width + x] << " ";
+        }
+        outfile << labels[y*width + width-1] << std::endl;
+    }
+    outfile.close();*/
 
 #endif
 
