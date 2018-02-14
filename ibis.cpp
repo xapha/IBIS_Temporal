@@ -34,6 +34,8 @@ IBIS::IBIS(int _maxSPNum, int _compacity ) {
     inv = new float[maxSPNumber];
     adjacent_sp = new int[size_roi*maxSPNumber];
     count_adjacent = new int[maxSPNumber];
+    prev_adjacent_sp = new int[size_roi*maxSPNumber];
+    prev_count_adjacent = new int[maxSPNumber];
 
     // temporal
     count_diff = new int[maxSPNumber];
@@ -76,6 +78,9 @@ IBIS::~IBIS() {
 
     delete[] adjacent_sp;
     delete[] count_adjacent;
+    delete[] prev_adjacent_sp;
+    delete[] prev_count_adjacent;
+
     delete[] initial_repartition;
     delete[] processed;
 
@@ -651,7 +656,7 @@ void IBIS::process( cv::Mat* img ) {
     cv::waitKey(0);*/
 
     enforceConnectivity();
-    assure_contiguity();
+    update_adj();
 
     global_mean_seeds();
 
@@ -664,10 +669,19 @@ void IBIS::process( cv::Mat* img ) {
         mask_propagate_SP();
 
         global_mean_seeds();
-        assure_contiguity();
+        update_adj();
         memcpy( initial_repartition, labels, sizeof(int) * size );
 
     }
+
+    memcpy( Xseeds_prev, Xseeds, sizeof( float ) * maxSPNumber );
+    memcpy( Yseeds_prev, Yseeds, sizeof( float ) * maxSPNumber );
+    memcpy( lseeds_prev, lseeds, sizeof( float ) * maxSPNumber );
+    memcpy( aseeds_prev, aseeds, sizeof( float ) * maxSPNumber );
+    memcpy( bseeds_prev, bseeds, sizeof( float ) * maxSPNumber );
+    memcpy( prev_adjacent_sp, adjacent_sp, sizeof( float ) * size_roi * maxSPNumber );
+    memcpy( prev_count_adjacent, count_adjacent, sizeof( float ) * maxSPNumber );
+
 
 #if OUTPUT_log
     st4 = now_ms() - lap;
@@ -708,12 +722,14 @@ void IBIS::process( cv::Mat* img ) {
 }
 
 bool IBIS::creation_deletion() {
+
     std::fill( elligible, elligible + size, 0 );
     std::fill( count_diff, count_diff + maxSPNumber, 0 );
 
     bool status = false;
     int biggest_sp = 0;
     int best_value;
+    float dist, D, conti;
 
     for( int i=0; i<SPNumber; i++ ) {
         if( countPx[ i ] < minSPSizeThreshold && !count_diff[ i ] ) {
@@ -769,6 +785,43 @@ bool IBIS::creation_deletion() {
 
     }
 
+    if( index_frame > 0 ) {
+        for( int i=0; i<SPNumber; i++ ) {
+            // test continuity
+            if( !count_diff[ i ] ) {
+                dist = ( lseeds[ i ] - lseeds_prev[ i ] ) * ( lseeds[ i ] - lseeds_prev[ i ] ) +
+                       ( aseeds[ i ] - aseeds_prev[ i ] ) * ( aseeds[ i ] - aseeds_prev[ i ] ) +
+                       ( bseeds[ i ] - bseeds_prev[ i ] ) * ( bseeds[ i ] - bseeds_prev[ i ] );
+
+                if( dist > 25.f ) {
+                    best_value = -1;
+                    D = 0;
+
+                    for( int j=0; j<prev_count_adjacent[ i ]; j++ ) {
+                        biggest_sp = prev_adjacent_sp[ size_roi*i + j ];
+
+                        conti = ( lseeds[ i ] - lseeds_prev[ biggest_sp ] ) * ( lseeds[ i ] - lseeds_prev[ biggest_sp ] ) +
+                                ( aseeds[ i ] - aseeds_prev[ biggest_sp ] ) * ( aseeds[ i ] - aseeds_prev[ biggest_sp ] ) +
+                                ( bseeds[ i ] - bseeds_prev[ biggest_sp ] ) * ( bseeds[ i ] - bseeds_prev[ biggest_sp ] );
+
+                        if( best_value < 0 || conti < D ) {
+                            best_value = biggest_sp;
+                            D = conti;
+
+                        }
+
+                    }
+
+                    inheritance[ i ] = best_value;
+
+                }
+
+            }
+
+        }
+
+    }
+
     if( status ) {
         for( int i=0; i<size; i++ ) {
             if( count_diff[ labels[i] ] )
@@ -815,7 +868,7 @@ void IBIS::mask_propagate_SP() {
 
 }
 
-void IBIS::assure_contiguity() {
+void IBIS::update_adj() {
     std::fill( updated_px, updated_px + size, false );
     std::fill( count_adjacent, count_adjacent + maxSPNumber, 0 );
     memset( x_vec, 0, sizeof(int) * size );

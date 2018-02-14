@@ -56,6 +56,8 @@ public:
     int getActualSPNumber() { return SPNumber; }
     int* getLabels() { return labels; }
     int* get_inheritance() { return inheritance; }
+    int* get_adjacent_sp() { return adjacent_sp; }
+    int* nb_adjacent_sp() { return count_adjacent; }
     float* get_Xseeds() { return Xseeds; }
     float* get_Yseeds() { return Yseeds; }
     float* get_lseeds() { return lseeds; }
@@ -69,7 +71,7 @@ protected:
     void initSeeds();
     void mask_propagate_SP();
     void mean_seeds();
-    void assure_contiguity();
+    void update_adj();
     void global_mean_seeds();
 
     double now_ms(void);
@@ -154,6 +156,8 @@ private:
     int* mask_size;
     int* adjacent_sp;
     int* count_adjacent;
+    int* prev_adjacent_sp;
+    int* prev_count_adjacent;
     int* initial_repartition;
     int* processed;
     int* x_vec;

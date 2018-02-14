@@ -66,6 +66,12 @@ private:
     int* HR_final;
     double* circular_fundamental;
     float* fundamental;
+    float* signal;
+    float* visu_signal;
+    float* output;
+    double* fft_data;
+    double* fft_buff;
+    double* variance;
 
     bool ready;
     bool complete_SNR;
@@ -75,7 +81,6 @@ private:
 
     void fft(double*, int, int);
     void filter(float *signal, int length, float fs, float *output, int order, float f1, float f2=0);// The order of the filter must be a multiple of 4.
-    void _CHROM(double* R_trace, double* G_trace, double* B_trace, double* output, int fft_size);
     float compute_SNR(double* input, int n_input, int dirac_width, int nb_harmonic, int visu);
 
 };

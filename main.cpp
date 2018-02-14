@@ -20,10 +20,10 @@
 #include "utils.h"
 #include "signal_processing.h"
 
-#define SAVE_output         1
+#define SAVE_output         0
 #define visu                1
-#define signal_size         600
-#define signal_processing   0
+#define signal_size         300
+#define signal_processing   1
 
 using namespace std;
 //=================================================================================
@@ -129,17 +129,6 @@ void write_traces(float* C1, float* C2, float* C3, const std::string& output_lab
 
     for (int y=0 ; y<SP->getActualSPNumber() ; y++)
     {
-        /*for (int x=0 ; x<signal_size-1 ; x++)
-        {
-            file << (double) C1[x*max_sp + y] << " ";
-            file << (double) C2[x*max_sp + y] << " ";
-            file << (double) C3[x*max_sp + y] << " ";
-
-        }
-        file << (double) C1[(signal_size-1)*max_sp + y] << " ";
-        file << (double) C2[(signal_size-1)*max_sp + y] << " ";
-        file << (double) C3[(signal_size-1)*max_sp + y] << std::endl;*/
-
         file << (double) C1[y] << " ";
         file << (double) C2[y] << " ";
         file << (double) C3[y] << std::endl;
@@ -208,9 +197,17 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
     }
 
-    float R[Super_Pixel->getMaxSPNumber()];
-    float G[Super_Pixel->getMaxSPNumber()];
-    float B[Super_Pixel->getMaxSPNumber()];
+    float* R = new float[Super_Pixel->getMaxSPNumber()];
+    float* G = new float[Super_Pixel->getMaxSPNumber()];
+    float* B = new float[Super_Pixel->getMaxSPNumber()];
+
+    float* R_avg = new float[Super_Pixel->getMaxSPNumber()];
+    float* G_avg = new float[Super_Pixel->getMaxSPNumber()];
+    float* B_avg = new float[Super_Pixel->getMaxSPNumber()];
+    memset( R_avg, 0, sizeof(float) * Super_Pixel->getMaxSPNumber() );
+    memset( G_avg, 0, sizeof(float) * Super_Pixel->getMaxSPNumber() );
+    memset( B_avg, 0, sizeof(float) * Super_Pixel->getMaxSPNumber() );
+
     for (i=0; i<Super_Pixel->getMaxSPNumber(); i++) {
         sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 0 ] /= count_px[ i ];
         sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 1 ] /= count_px[ i ];
@@ -222,99 +219,116 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
     }
 
+    // increase stat
+    int* adj = Super_Pixel->get_adjacent_sp();
+    int* nb_adj = Super_Pixel->nb_adjacent_sp();
+    for (i=0; i<Super_Pixel->getActualSPNumber(); i++) {
+        for( int j=0; j<nb_adj[i]; j++ ) {
+            R_avg[i] += R[adj[9*i+j]];
+            G_avg[i] += G[adj[9*i+j]];
+            B_avg[i] += B[adj[9*i+j]];
+
+        }
+
+        R_avg[i] /= float(nb_adj[i]);
+        G_avg[i] /= float(nb_adj[i]);
+        B_avg[i] /= float(nb_adj[i]);
+
+    }
+
     // signal processing
 #if signal_processing
     Signal->add_frame( Super_Pixel->get_inheritance(),
-                       R,
-                       G,
-                       B,
+                       R_avg,
+                       G_avg,
+                       B_avg,
                        Super_Pixel->getActualSPNumber() );
 
     Signal->process();
 #endif
-    if( frame_index % 1 == 0 ) {
-        if( frame_index % 5 == 0 )
-            printf("-frame\t%i\n", frame_index);
+    if( frame_index % 5 == 0 )
+        printf("-frame\t%i\n", frame_index);
 
 #if visu
-        // SNR superposition
-        float* SNR;
-        if( frame_index > signal_size ) {
-            SNR = Signal->get_SNR();
+    // SNR superposition
+    float* SNR;
+    if( frame_index > signal_size ) {
+        SNR = Signal->get_SNR();
 
-        }
+    }
 
-        for (i=0, ii=0; i < 3 * size; i += 3, ii++) {
-            int sp = labels[ii];
+    for (i=0, ii=0; i < 3 * size; i += 3, ii++) {
+        int sp = labels[ii];
 
-            if (sp >= 0) {
+        if (sp >= 0) {
 
-                pImg->ptr()[i + 2]  = (unsigned char) img->ptr()[i+2]; //(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
-                pImg->ptr()[i + 1]  = (unsigned char) img->ptr()[i+1]; //(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
-                pImg->ptr()[i]      = (unsigned char) img->ptr()[i+0]; //(sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);
+            pImg->ptr()[i + 2]  = (unsigned char) img->ptr()[i+2];
+            pImg->ptr()[i + 1]  = (unsigned char) img->ptr()[i+1];
+            pImg->ptr()[i]      = (unsigned char) img->ptr()[i+0];
 
-                /*pImg->ptr()[i + 2]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
-                pImg->ptr()[i + 1]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
-                pImg->ptr()[i]      = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);*/
+            /*pImg->ptr()[i + 2]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
+            pImg->ptr()[i + 1]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
+            pImg->ptr()[i]      = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);*/
 
-                if( ubuff[ ii ] == 255 ) {
-                    pImg->ptr()[i + 2]  = 255;
-                    pImg->ptr()[i + 1]  = 255;
-                    pImg->ptr()[i]      = 255;
-
-                }
-
-#if signal_processing
-                if( frame_index > signal_size ) {
-                    if( SNR[ labels[ii] ] > 0 && ubuff[ ii ] == 255 ) {
-                        if( SNR[ labels[ii] ] > 5 )
-                            pImg->ptr()[i + 2]  = 255;
-                        else
-                            pImg->ptr()[i + 2]  = (unsigned char)(255 * SNR[ labels[ii] ] / 5 );
-
-                        pImg->ptr()[i + 1]  = 0;
-                        pImg->ptr()[i]      = 0;
-
-                    }
-
-                }
-#endif
+            if( ubuff[ ii ] == 255 ) {
+                pImg->ptr()[i + 2]  = 255;
+                pImg->ptr()[i + 1]  = 255;
+                pImg->ptr()[i]      = 255;
 
             }
 
+#if signal_processing
+            if( frame_index > signal_size ) {
+                if( SNR[ labels[ii] ] > 0 && ubuff[ ii ] == 255 ) {
+                    if( SNR[ labels[ii] ] > 5 )
+                        pImg->ptr()[i + 2]  = 255;
+                    else
+                        pImg->ptr()[i + 2]  = (unsigned char)(255 * SNR[ labels[ii] ] / 5 );
+
+                    pImg->ptr()[i + 1]  = 0;
+                    pImg->ptr()[i]      = 0;
+
+                }
+
+            }
+#endif
+
         }
+
+    }
 
 
 //#if signal_processing
-        // add text
-        char text[255] = "";
-        sprintf( text, "HR: %i", Signal->get_HR() );
-        cv::putText(*pImg, text, cv::Point(30,30),
-            cv::FONT_HERSHEY_COMPLEX_SMALL, 0.8, cv::Scalar(200,200,250), 1, CV_AA);
+    // add text
+    char text[255] = "";
+    sprintf( text, "HR: %i", Signal->get_HR() );
+    cv::putText(*pImg, text, cv::Point(30,30),
+        cv::FONT_HERSHEY_COMPLEX_SMALL, 0.8, cv::Scalar(200,200,250), 1, CV_AA);
 
-        for( int i=0; i<Super_Pixel->getActualSPNumber(); i++ ) {
-            sprintf( text, "%i", i );
+    /*for( int i=0; i<Super_Pixel->getActualSPNumber(); i++ ) {
+        sprintf( text, "%i", i );
 
-            cv::putText(*pImg, text, cv::Point( int(round(double(Super_Pixel->get_Xseeds()[i]))), int(round(double(Super_Pixel->get_Yseeds()[i]))) ),
-                cv::FONT_HERSHEY_COMPLEX_SMALL, 0.6, cv::Scalar(0,0,250), 1, CV_AA);
+        cv::putText(*pImg, text, cv::Point( int(round(double(Super_Pixel->get_Xseeds()[i]))), int(round(double(Super_Pixel->get_Yseeds()[i]))) ),
+            cv::FONT_HERSHEY_COMPLEX_SMALL, 0.6, cv::Scalar(0,0,250), 1, CV_AA);
 
 
-        }
+    }*/
 //#endif
 
-        cv::imshow("rgb mean", *pImg);
-        /*if( frame_index > signal_size )
-            cv::waitKey( 0 );
-        else*/
-            cv::waitKey( 1 );
-
-        delete[] sum_rgb;
-        delete[] count_px;
-        delete pImg;
-        delete output_bounds;
-
-    }
+    cv::imshow("rgb mean", *pImg);
+    cv::waitKey( 1 );
 #endif
+
+    delete pImg;
+    delete output_bounds;
+    delete[] sum_rgb;
+    delete[] count_px;
+    delete[] R;
+    delete[] G;
+    delete[] B;
+    delete[] R_avg;
+    delete[] G_avg;
+    delete[] B_avg;
 
 #if SAVE_output
     char output_labels[255] = {0};
@@ -453,12 +467,12 @@ int main( int argc, char* argv[] )
         int ii=0;
         std::string output_basename = get_name( argv[3] );
 
-        /*if( type == 1 ) {
+        if( type == 1 ) {
             char command[255] = {0};
             sprintf( command, "mkdir -p results/%s\n", output_basename.c_str() );
             system( command );
 
-        }*/
+        }
 
         while( video.read( img ) ) {
             execute_IBIS( K, compa, &Super_Pixel, &Signal, &img, output_basename, ii );
