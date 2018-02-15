@@ -47,6 +47,7 @@ public:
     float* get_C3() { return buff_signals_c3; }
 
 private:
+    int index_processed;
     int size_signals;
     int max_SP;
     int nb_sp;
@@ -73,6 +74,9 @@ private:
     double* fft_buff;
     double* variance;
 
+    //iPBV
+    double* PBV;
+
     bool ready;
     bool complete_SNR;
     int count_SNR;
@@ -81,6 +85,7 @@ private:
 
     void fft(double*, int, int);
     void filter(float *signal, int length, float fs, float *output, int order, float f1, float f2=0);// The order of the filter must be a multiple of 4.
+    void filter(double *signal, int length, float fs, float *output, int order, float f1, float f2=0);// The order of the filter must be a multiple of 4.
     float compute_SNR(double* input, int n_input, int dirac_width, int nb_harmonic, int visu);
 
 };

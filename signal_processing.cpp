@@ -9,6 +9,7 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     count_SNR = 0;
     ready=false;
     complete_SNR=false;
+    index_processed=0;
 
     buff_signals = new float[ max_SP * size_signals ];
     buff_signals_c1 = new float[ max_SP * size_signals ];
@@ -43,6 +44,8 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     memset(HR_final, 0, sizeof(int) * size_signals );
     memset(buff_HR, 0, sizeof(int) * max_SP * size_signals );
 
+    PBV = new double[3*max_SP];
+
 }
 
 Signal_processing::~Signal_processing() {
@@ -67,12 +70,15 @@ Signal_processing::~Signal_processing() {
     delete[] fft_data;
     delete[] fft_buff;
     delete[] variance;
+    delete[] PBV;
 
 }
 
 void Signal_processing::process() {
     // construct signals based on inheritance table
     if( ready ) {
+        index_processed++;
+
         construct_signal();
 
         int temp_index = index_circular - 1;
@@ -103,11 +109,11 @@ void Signal_processing::process() {
             signal[ 0 ] = 0.f;
 
             // filter signal
-            filter( signal, size_signals, FS, output, 4, 0.4f, 4.f);
+            //filter( signal, size_signals, FS, output, 4, 0.4f, 4.f);
 
             // compute fft
             for( int j=0; j<size_signals; j++ )
-                fft_data[j] = double( output[j] );
+                fft_data[j] = double( signal[j] );
 
             fft(fft_data, size_signals, GSL_FFT_FORWARD);
             for( int j=0; j<size_signals; j++ ) {
@@ -155,7 +161,7 @@ void Signal_processing::process() {
 
         memset( fft_data, 0, sizeof(double)*size_signals );
 
-        /*for( int i=0; i<nb_sp; i++ ) {
+        for( int i=0; i<nb_sp; i++ ) {
             for( int j=0; j<size_signals; j++ ) {
                 if( SNR[i] > 0 ) {
                     fft_data[j] += SNR[i] * fft_buff[ nb_sp * j + i ];
@@ -164,9 +170,9 @@ void Signal_processing::process() {
 
             }
 
-        }*/
+        }
 
-        /*CvPlot::clear("fft");
+        CvPlot::clear("fft");
         CvPlot::plot( "fft", fft_data, size_signals );
 
         HR = round( float(gsl_stats_max_index( fft_data, 1, size_signals )) * 30.f * float( FS / float( size_signals ) ) );
@@ -216,7 +222,7 @@ void Signal_processing::process() {
         HR_final[ 0 ] = 40;
         HR_final[ size_signals-1 ] = 140;
         CvPlot::clear("HR");
-        CvPlot::plot( "HR", HR_final, size_signals );*/
+        CvPlot::plot( "HR", HR_final, size_signals );
 
         cv::waitKey( 1 );
 
@@ -240,15 +246,7 @@ void Signal_processing::add_frame( int* parent, float* c_1, float* c_2, float* c
             circular_data_c3[ max_SP * index_circular + i ] = c_3[ i ];
 
         }
-        /*else {
-            for( int j=0; j<size_signals-1; j++ ) {
-                circular_data_c1[ max_SP * j + i ] = circular_data_c1[ max_SP * j + parent[ i ] ];
-                circular_data_c2[ max_SP * j + i ] = circular_data_c2[ max_SP * j + parent[ i ] ];
-                circular_data_c3[ max_SP * j + i ] = circular_data_c3[ max_SP * j + parent[ i ] ];
 
-            }
-
-        }*/
         circular_parent[ max_SP * index_circular + i ] = parent[ i ];
 
     }
@@ -280,10 +278,6 @@ void Signal_processing::construct_signal() {
             c1 = circular_data_c1[ max_SP * temp_index + parent_index ];
             c2 = circular_data_c2[ max_SP * temp_index + parent_index ];
             c3 = circular_data_c3[ max_SP * temp_index + parent_index ];
-
-            /*c1 = circular_data_c1[ max_SP * temp_index + j ];
-            c2 = circular_data_c2[ max_SP * temp_index + j ];
-            c3 = circular_data_c3[ max_SP * temp_index + j ];*/
 
             buff_signals_c1[ max_SP * ( size_signals - 1 - i ) + j ] = c1;
             buff_signals_c2[ max_SP * ( size_signals - 1 - i ) + j ] = c2;
@@ -335,8 +329,22 @@ void Signal_processing::construct_signal() {
 
         }
 
+        filter( C1, size_signals, FS, output, 4, 0.4f, 4.f);
+        for(int i=0; i<size_signals; i++)
+            C1[i] = double(output[i]);
+
+        filter( C2, size_signals, FS, output, 4, 0.4f, 4.f);
+        for(int i=0; i<size_signals; i++)
+            C2[i] = double(output[i]);
+
+        filter( C3, size_signals, FS, output, 4, 0.4f, 4.f);
+        for(int i=0; i<size_signals; i++)
+            C3[i] = double(output[i]);
+
+        //-- -- -- -- -- CHROM
+
         //Xs && Ys
-        for(int i=0; i<size_signals; i++) {
+        /*for(int i=0; i<size_signals; i++) {
             Xf[i] = 3*C1[i]-2*C2[i];
             Yf[i] = 1.5*C1[i]+C2[i]-1.5*C3[i];
 
@@ -349,6 +357,107 @@ void Signal_processing::construct_signal() {
 
         for( int i=0; i<size_signals-1; i++ ) {
             buff_signals[ max_SP * i + j ] = float( Xf[i] - alpha*Yf[i] );
+
+        }*/
+
+        //-- -- -- -- -- iPBV
+        if( index_processed == 1 ) {
+            //Xs && Ys
+            for(int i=0; i<size_signals; i++) {
+                Xf[i] = 3*C1[i]-2*C2[i];
+                Yf[i] = 1.5*C1[i]+C2[i]-1.5*C3[i];
+
+            }
+
+            double std_xf = gsl_stats_sd(Xf, 1, size_signals);
+            double std_yf = gsl_stats_sd(Yf, 1, size_signals);
+
+            alpha = std_xf / std_yf;
+
+            cv::Mat_<double> ref( 1, size_signals );
+            cv::Mat_<double> sig( 3, size_signals ); // 3 * S
+
+            cv::Mat_<double> buff_3_3( 3, 3 ); // 3 * 3
+            cv::Mat_<double> buff_1_3( 1, 3 ); // 1 * 3
+
+            cv::Mat_<double> Pbv( 1, 3 );
+
+            for( int i=0; i<size_signals-1; i++ ) {
+                ref(0, i) = double( Xf[i] - alpha*Yf[i] );
+
+                sig(0, i) = double(C1[i]);
+                sig(1, i) = double(C2[i]);
+                sig(2, i) = double(C3[i]);
+
+            }
+
+            // compute first PBV
+            Pbv = ref * sig.t();
+            buff_3_3 = sig * sig.t();
+            buff_1_3 = Pbv * buff_3_3.inv();
+
+            double val = 0;
+            for( int i=0; i<3; i++ ) {
+                double v = buff_1_3(1, i);
+                if( v > val )
+                    val = v;
+
+            }
+
+            buff_1_3 *= 1/val;
+
+            ref = buff_1_3 * sig;
+            for( int i=0; i<size_signals-1; i++ )
+                buff_signals[ max_SP * i + j ] = ref.ptr()[i];
+
+            PBV[max_SP*0 + j] = Pbv(0, 0);
+            PBV[max_SP*1 + j] = Pbv(0, 1);
+            PBV[max_SP*2 + j] = Pbv(0, 2);
+
+        }
+        else {
+            cv::Mat_<double> ref( 1, size_signals );
+            cv::Mat_<double> sig( 3, size_signals ); // 3 * S
+
+            cv::Mat_<double> buff_3_3( 3, 3 ); // 3 * 3
+            cv::Mat_<double> buff_1_3( 1, 3 ); // 1 * 3
+
+            cv::Mat_<double> Pbv( 1, 3 );
+
+            for( int i=0; i<size_signals-1; i++ ) {
+                sig(0, i) = double(C1[i]);
+                sig(1, i) = double(C2[i]);
+                sig(2, i) = double(C3[i]);
+
+            }
+
+            // compute first PBV
+            Pbv(0, 0) = PBV[max_SP*0 + j];
+            Pbv(0, 1) = PBV[max_SP*1 + j];
+            Pbv(0, 2) = PBV[max_SP*2+ j];
+
+            buff_3_3 = sig * sig.t();
+            buff_1_3 = Pbv * buff_3_3.inv();
+
+            double val = 0;
+            for( int i=0; i<3; i++ ) {
+                double v = buff_1_3(1, i);
+                if( v > val )
+                    val = v;
+
+            }
+
+            buff_1_3 *= 1/val;
+
+            ref = buff_1_3 * sig;
+            for( int i=0; i<size_signals-1; i++ )
+                buff_signals[ max_SP * i + j ] = ref.ptr()[i];
+
+            Pbv = ref * sig.t();
+
+            PBV[max_SP*0 + j] = Pbv(0, 0);
+            PBV[max_SP*1 + j] = Pbv(0, 1);
+            PBV[max_SP*2 + j] = Pbv(0, 2);
 
         }
 
@@ -430,6 +539,66 @@ void Signal_processing::filter(float* signal, int length, float s, float* output
     for(j=0; j<length; j++) {
         for(i=0; i<n; ++i) {
             w0[i] = d1[i]*w1[i] + d2[i]*w2[i]+ d3[i]*w3[i]+ d4[i]*w4[i] + signal[j];
+            output[j] = A[i]*(w0[i] - C2*w2[i] + w4[i]);
+            w4[i] = w3[i];
+            w3[i] = w2[i];
+            w2[i] = w1[i];
+            w1[i] = w0[i];
+        }
+    }
+
+    free(A);
+    free(d1);
+    free(d2);
+    free(d3);
+    free(d4);
+    free(w0);
+    free(w1);
+    free(w2);
+    free(w3);
+    free(w4);
+}
+
+void Signal_processing::filter(double* signal, int length, float s, float* output, int n, float f1, float f2)
+{
+    f1 *= 2;
+    f2 *= 2;
+    float a = cos(M_PI*(f1+f2)/s)/cos(M_PI*(f2-f1)/s);
+    float a2 = a*a;
+    float b = tan(M_PI*(f2-f1)/s);
+    float b2 = b*b;
+    float r;
+
+    int i,j;
+    n = n/4;
+    float *A = (float *)malloc(n*sizeof(float));
+    float *d1 = (float *)malloc(n*sizeof(float));
+    float *d2 = (float *)malloc(n*sizeof(float));
+    float *d3 = (float *)malloc(n*sizeof(float));
+    float *d4 = (float *)malloc(n*sizeof(float));
+    float *w0 = (float *)calloc(n, sizeof(float));
+    float *w1 = (float *)calloc(n, sizeof(float));
+    float *w2 = (float *)calloc(n, sizeof(float));
+    float *w3 = (float *)calloc(n, sizeof(float));
+    float *w4 = (float *)calloc(n, sizeof(float));
+
+    float C1 = 1.0;
+    float C2 = 2.0;
+    float C4 = 4.0;
+
+    for(i=0; i<n; ++i) {
+        r = sin(M_PI*(C2*i+C1)/(C4*n));
+        s = b2 + C2*b*r + C1;
+
+        A[i] = b2/s;
+        d1[i] = C4*a*(C1+b*r)/s;
+        d2[i] = C2*(b2-C2*a2-C1)/s;
+        d3[i] = C4*a*(C1-b*r)/s;
+        d4[i] = -(b2 - C2*b*r + C1)/s;
+    }
+    for(j=0; j<length; j++) {
+        for(i=0; i<n; ++i) {
+            w0[i] = d1[i]*w1[i] + d2[i]*w2[i]+ d3[i]*w3[i]+ d4[i]*w4[i] + float(signal[j]);
             output[j] = A[i]*(w0[i] - C2*w2[i] + w4[i]);
             w4[i] = w3[i];
             w3[i] = w2[i];

@@ -657,7 +657,6 @@ void IBIS::process( cv::Mat* img ) {
 
     enforceConnectivity();
     update_adj();
-
     global_mean_seeds();
 
     memcpy( initial_repartition, labels, sizeof(int) * size );
@@ -668,7 +667,7 @@ void IBIS::process( cv::Mat* img ) {
 
         mask_propagate_SP();
 
-        global_mean_seeds();
+        //global_mean_seeds();
         update_adj();
         memcpy( initial_repartition, labels, sizeof(int) * size );
 
@@ -789,11 +788,11 @@ bool IBIS::creation_deletion() {
         for( int i=0; i<SPNumber; i++ ) {
             // test continuity
             if( !count_diff[ i ] ) {
-                dist = ( lseeds[ i ] - lseeds_prev[ i ] ) * ( lseeds[ i ] - lseeds_prev[ i ] ) +
+                /*dist = ( lseeds[ i ] - lseeds_prev[ i ] ) * ( lseeds[ i ] - lseeds_prev[ i ] ) +
                        ( aseeds[ i ] - aseeds_prev[ i ] ) * ( aseeds[ i ] - aseeds_prev[ i ] ) +
-                       ( bseeds[ i ] - bseeds_prev[ i ] ) * ( bseeds[ i ] - bseeds_prev[ i ] );
+                       ( bseeds[ i ] - bseeds_prev[ i ] ) * ( bseeds[ i ] - bseeds_prev[ i ] );*/
 
-                if( dist > 25.f ) {
+                //if( dist > 10.f ) {
                     best_value = -1;
                     D = 0;
 
@@ -814,7 +813,7 @@ bool IBIS::creation_deletion() {
 
                     inheritance[ i ] = best_value;
 
-                }
+                //}
 
             }
 
@@ -953,22 +952,6 @@ void IBIS::update_adj() {
                 // single pixel
                 if( count_vec == 1 )
                     updated_px[ current_index ] = true;
-
-                // check if only one adjacent SP, if so, reallocate current SP pixels to the global one
-                /*if( nb_adj <= 3 ) {
-
-                    for( int index_vec = 0; index_vec < count_vec; index_vec++ ) {
-
-                        prospect_index = vertical_index[ y_vec[ index_vec ] ] + x_vec[ index_vec ];
-
-                        if( nb_adj == 1 )
-                            labels[ prospect_index ] = adj_label[ 0 ];
-                        else
-                            labels[ prospect_index ] = adj_label[ 1 ];
-
-                    }
-
-                }*/
 
                 // update sp neighbour
                 for( int index_adj=0; index_adj<nb_adj; index_adj++ ) {

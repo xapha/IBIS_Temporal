@@ -222,17 +222,31 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
     // increase stat
     int* adj = Super_Pixel->get_adjacent_sp();
     int* nb_adj = Super_Pixel->nb_adjacent_sp();
+    float dist;
     for (i=0; i<Super_Pixel->getActualSPNumber(); i++) {
+        ii=0;
+
         for( int j=0; j<nb_adj[i]; j++ ) {
-            R_avg[i] += R[adj[9*i+j]];
-            G_avg[i] += G[adj[9*i+j]];
-            B_avg[i] += B[adj[9*i+j]];
+            int sp = adj[9*i+j];
+
+            dist = ( R[ i ] - R[ sp ] ) * ( R[ i ] - R[ sp ] ) +
+                   ( G[ i ] - G[ sp ] ) * ( G[ i ] - G[ sp ] ) +
+                   ( B[ i ] - B[ sp ] ) * ( B[ i ] - B[ sp ] );
+            dist /= 9;
+
+            if( dist < 100.f ) {
+                R_avg[ i ] += R[ sp ];
+                G_avg[ i ] += G[ sp ];
+                B_avg[ i ] += B[ sp ];
+                ii++;
+
+            }
 
         }
 
-        R_avg[i] /= float(nb_adj[i]);
-        G_avg[i] /= float(nb_adj[i]);
-        B_avg[i] /= float(nb_adj[i]);
+        R_avg[i] /= float(ii); //float(nb_adj[i]);
+        G_avg[i] /= float(ii); //float(nb_adj[i]);
+        B_avg[i] /= float(ii); //float(nb_adj[i]);
 
     }
 
@@ -246,77 +260,80 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
     Signal->process();
 #endif
-    if( frame_index % 5 == 0 )
+    if( frame_index % 5 == 0 ) {
         printf("-frame\t%i\n", frame_index);
-
-#if visu
-    // SNR superposition
-    float* SNR;
-    if( frame_index > signal_size ) {
-        SNR = Signal->get_SNR();
-
     }
 
-    for (i=0, ii=0; i < 3 * size; i += 3, ii++) {
-        int sp = labels[ii];
-
-        if (sp >= 0) {
-
-            pImg->ptr()[i + 2]  = (unsigned char) img->ptr()[i+2];
-            pImg->ptr()[i + 1]  = (unsigned char) img->ptr()[i+1];
-            pImg->ptr()[i]      = (unsigned char) img->ptr()[i+0];
-
-            /*pImg->ptr()[i + 2]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
-            pImg->ptr()[i + 1]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
-            pImg->ptr()[i]      = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);*/
-
-            if( ubuff[ ii ] == 255 ) {
-                pImg->ptr()[i + 2]  = 255;
-                pImg->ptr()[i + 1]  = 255;
-                pImg->ptr()[i]      = 255;
-
-            }
-
-#if signal_processing
-            if( frame_index > signal_size ) {
-                if( SNR[ labels[ii] ] > 0 && ubuff[ ii ] == 255 ) {
-                    if( SNR[ labels[ii] ] > 5 )
-                        pImg->ptr()[i + 2]  = 255;
-                    else
-                        pImg->ptr()[i + 2]  = (unsigned char)(255 * SNR[ labels[ii] ] / 5 );
-
-                    pImg->ptr()[i + 1]  = 0;
-                    pImg->ptr()[i]      = 0;
-
-                }
-
-            }
-#endif
+#if visu
+        // SNR superposition
+        float* SNR;
+        if( frame_index > signal_size ) {
+            SNR = Signal->get_SNR();
 
         }
 
-    }
+        for (i=0, ii=0; i < 3 * size; i += 3, ii++) {
+            int sp = labels[ii];
+
+            if (sp >= 0) {
+
+                pImg->ptr()[i + 2]  = (unsigned char) img->ptr()[i+2];
+                pImg->ptr()[i + 1]  = (unsigned char) img->ptr()[i+1];
+                pImg->ptr()[i]      = (unsigned char) img->ptr()[i+0];
+
+                /*pImg->ptr()[i + 2]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
+                pImg->ptr()[i + 1]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
+                pImg->ptr()[i]      = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);*/
+
+                if( ubuff[ ii ] == 255 ) {
+                    pImg->ptr()[i + 2]  = 255;
+                    pImg->ptr()[i + 1]  = 255;
+                    pImg->ptr()[i]      = 255;
+
+                }
+
+#if signal_processing
+                if( frame_index > signal_size ) {
+                    if( SNR[ labels[ii] ] > 0 && ubuff[ ii ] == 255 ) {
+                        if( SNR[ labels[ii] ] > 5 )
+                            pImg->ptr()[i + 2]  = 255;
+                        else
+                            pImg->ptr()[i + 2]  = (unsigned char)(255 * SNR[ labels[ii] ] / 5 );
+
+                        pImg->ptr()[i + 1]  = 0;
+                        pImg->ptr()[i]      = 0;
+
+                    }
+
+                }
+#endif
+
+            }
+
+        }
 
 
-//#if signal_processing
-    // add text
-    char text[255] = "";
-    sprintf( text, "HR: %i", Signal->get_HR() );
-    cv::putText(*pImg, text, cv::Point(30,30),
-        cv::FONT_HERSHEY_COMPLEX_SMALL, 0.8, cv::Scalar(200,200,250), 1, CV_AA);
+    //#if signal_processing
+        // add text
+        char text[255] = "";
+        sprintf( text, "HR: %i", Signal->get_HR() );
+        cv::putText(*pImg, text, cv::Point(30,30),
+            cv::FONT_HERSHEY_COMPLEX_SMALL, 0.8, cv::Scalar(200,200,250), 1, CV_AA);
 
-    /*for( int i=0; i<Super_Pixel->getActualSPNumber(); i++ ) {
-        sprintf( text, "%i", i );
+        /*for( int i=0; i<Super_Pixel->getActualSPNumber(); i++ ) {
+            sprintf( text, "%i", i );
 
-        cv::putText(*pImg, text, cv::Point( int(round(double(Super_Pixel->get_Xseeds()[i]))), int(round(double(Super_Pixel->get_Yseeds()[i]))) ),
-            cv::FONT_HERSHEY_COMPLEX_SMALL, 0.6, cv::Scalar(0,0,250), 1, CV_AA);
+            cv::putText(*pImg, text, cv::Point( int(round(double(Super_Pixel->get_Xseeds()[i]))), int(round(double(Super_Pixel->get_Yseeds()[i]))) ),
+                cv::FONT_HERSHEY_COMPLEX_SMALL, 0.6, cv::Scalar(0,0,250), 1, CV_AA);
 
 
-    }*/
-//#endif
+        }*/
+    //#endif
 
-    cv::imshow("rgb mean", *pImg);
-    cv::waitKey( 1 );
+        cv::imshow("rgb mean", *pImg);
+        cv::waitKey( 1 );
+
+    //}
 #endif
 
     delete pImg;
