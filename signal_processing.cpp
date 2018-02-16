@@ -94,10 +94,29 @@ void Signal_processing::process() {
         for( int i=0; i<nb_sp; i++ ) {
 
             // succesive HR estimation variance
-            for( int j=0; j<size_signals; j++ )
-                fft_data[ j ] = buff_HR[ max_SP * j + i ];
+            for( int j=0; j<size_signals; j++ ) {
+                if( buff_HR[ max_SP * j + i ] > 40 && buff_HR[ max_SP * j + i ] < 140 )
+                    fft_data[ j ] = buff_HR[ max_SP * j + i ];
+                else
+                    fft_data[ j ] = 0;
 
-            variance[ i ] = gsl_stats_variance( fft_data, 1, size_signals );
+            }
+
+            bool stat = false;
+            for( int j=0; j<size_signals; j++ ) {
+                if( fft_data[j] > 0  ) {
+                    stat = true;
+                    break;
+
+                }
+
+            }
+
+            if( stat )
+                variance[ i ] = gsl_stats_variance( fft_data, 1, size_signals );
+            else
+                variance[ 1 ] = 0;
+
             if( variance[ i ] > max_variance )
                 max_variance = variance[ i ];
 
@@ -107,6 +126,7 @@ void Signal_processing::process() {
             }
 
             signal[ 0 ] = 0.f;
+            signal[ size_signals-1 ] = 0.f;
 
             // filter signal
             //filter( signal, size_signals, FS, output, 4, 0.4f, 4.f);
@@ -145,14 +165,19 @@ void Signal_processing::process() {
         if( count_SNR < size_signals )
             count_SNR++;
 
-        for( int i=0; i<nb_sp; i++ )
-            variance[ i ] = 1 - variance[ i ]/max_variance;
+        for( int i=0; i<nb_sp; i++ ) {
+            if( variance[ i ] > 0 )
+                variance[ i ] = 1 - variance[ i ]/max_variance;
+            else
+                variance[ i ] = 0;
+
+        }
 
         float max_SNR=0;
         float weight[nb_sp] = {0.f};
         float sum_weight=0.f;
         for( int i=0; i<nb_sp; i++ ) {
-            SNR[i] = SNR[i] / count_SNR;// * variance[i];
+            SNR[i] = SNR[i] / count_SNR;
 
             weight[i] = pow( 10.0, double(SNR[i])/6 );
             sum_weight += weight[i];
@@ -266,6 +291,7 @@ void Signal_processing::construct_signal() {
     memset( SNR, 0, sizeof(float) * max_SP );
     float c1, c2, c3;
 
+//#pragma omp parallel for num_threads(4)
     for( int j=0; j<nb_sp; j++ ) {
          parent_index = j;
 
@@ -363,7 +389,7 @@ void Signal_processing::construct_signal() {
         //-- -- -- -- -- iPBV
         if( index_processed == 1 ) {
             //Xs && Ys
-            for(int i=0; i<size_signals; i++) {
+            /*for(int i=0; i<size_signals; i++) {
                 Xf[i] = 3*C1[i]-2*C2[i];
                 Yf[i] = 1.5*C1[i]+C2[i]-1.5*C3[i];
 
@@ -372,7 +398,7 @@ void Signal_processing::construct_signal() {
             double std_xf = gsl_stats_sd(Xf, 1, size_signals);
             double std_yf = gsl_stats_sd(Yf, 1, size_signals);
 
-            alpha = std_xf / std_yf;
+            alpha = std_xf / std_yf;*/
 
             cv::Mat_<double> ref( 1, size_signals );
             cv::Mat_<double> sig( 3, size_signals ); // 3 * S
@@ -382,33 +408,32 @@ void Signal_processing::construct_signal() {
 
             cv::Mat_<double> Pbv( 1, 3 );
 
-            for( int i=0; i<size_signals-1; i++ ) {
-                ref(0, i) = double( Xf[i] - alpha*Yf[i] );
+            double std_xf = gsl_stats_sd(C2, 1, size_signals);
+            double std_yf = gsl_stats_sd(C3, 1, size_signals);
 
-                sig(0, i) = double(C1[i]);
-                sig(1, i) = double(C2[i]);
-                sig(2, i) = double(C3[i]);
+            alpha = std_xf / std_yf;
+
+            for( int i=0; i<size_signals-1; i++ ) {
+                //ref(0, i) = -( Xf[i] - alpha*Yf[i] );
+                ref(0, i) = C2[ i ] - alpha*C3[ i ];
+
+                sig(0, i) = C1[i];
+                sig(1, i) = C2[i];
+                sig(2, i) = C3[i];
 
             }
 
             // compute first PBV
             Pbv = ref * sig.t();
-            buff_3_3 = sig * sig.t();
-            buff_1_3 = Pbv * buff_3_3.inv();
-
-            double val = 0;
-            for( int i=0; i<3; i++ ) {
-                double v = buff_1_3(1, i);
-                if( v > val )
-                    val = v;
-
-            }
-
-            buff_1_3 *= 1/val;
+            buff_3_3 = ( sig * sig.t() ).inv();
+            buff_1_3 = Pbv * buff_3_3;
 
             ref = buff_1_3 * sig;
-            for( int i=0; i<size_signals-1; i++ )
-                buff_signals[ max_SP * i + j ] = ref.ptr()[i];
+            for( int i=0; i<size_signals-1; i++ ) {
+                float a = float( ref(0, i) );
+                buff_signals[ max_SP * i + j ] = a;
+
+            }
 
             PBV[max_SP*0 + j] = Pbv(0, 0);
             PBV[max_SP*1 + j] = Pbv(0, 1);
@@ -425,39 +450,34 @@ void Signal_processing::construct_signal() {
             cv::Mat_<double> Pbv( 1, 3 );
 
             for( int i=0; i<size_signals-1; i++ ) {
-                sig(0, i) = double(C1[i]);
-                sig(1, i) = double(C2[i]);
-                sig(2, i) = double(C3[i]);
+                sig(0, i) = C1[i];
+                sig(1, i) = C2[i];
+                sig(2, i) = C3[i];
 
             }
 
             // compute first PBV
             Pbv(0, 0) = PBV[max_SP*0 + j];
             Pbv(0, 1) = PBV[max_SP*1 + j];
-            Pbv(0, 2) = PBV[max_SP*2+ j];
+            Pbv(0, 2) = PBV[max_SP*2 + j];
 
-            buff_3_3 = sig * sig.t();
-            buff_1_3 = Pbv * buff_3_3.inv();
-
-            double val = 0;
-            for( int i=0; i<3; i++ ) {
-                double v = buff_1_3(1, i);
-                if( v > val )
-                    val = v;
-
-            }
-
-            buff_1_3 *= 1/val;
+            buff_3_3 = ( sig * sig.t() ).inv();
+            buff_1_3 = Pbv * buff_3_3;
 
             ref = buff_1_3 * sig;
             for( int i=0; i<size_signals-1; i++ )
-                buff_signals[ max_SP * i + j ] = ref.ptr()[i];
+                buff_signals[ max_SP * i + j ] = float( ref( 0, i ) );
 
             Pbv = ref * sig.t();
 
-            PBV[max_SP*0 + j] = Pbv(0, 0);
+            double alpha = 0.99;
+            PBV[max_SP*0 + j] = alpha*PBV[max_SP*0 + j] + ( 1 - alpha )*Pbv(0, 0);
+            PBV[max_SP*1 + j] = alpha*PBV[max_SP*1 + j] + ( 1 - alpha )*Pbv(0, 1);
+            PBV[max_SP*2 + j] = alpha*PBV[max_SP*2 + j] + ( 1 - alpha )*Pbv(0, 2);
+
+            /*PBV[max_SP*0 + j] = Pbv(0, 0);
             PBV[max_SP*1 + j] = Pbv(0, 1);
-            PBV[max_SP*2 + j] = Pbv(0, 2);
+            PBV[max_SP*2 + j] = Pbv(0, 2);*/
 
         }
 
@@ -659,7 +679,10 @@ float Signal_processing::compute_SNR(double* input, int n_input, int dirac_width
         }
     }
 
-    SNR = float(10*log10(int_signal / int_noise));
+    if( int_noise > 0 )
+        SNR = float(10*log10(int_signal / int_noise));
+    else
+        SNR = 0.f;
 
     if(visu > 0) {
         CvPlot::clear("Visu fft");

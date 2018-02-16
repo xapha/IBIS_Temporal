@@ -262,7 +262,6 @@ void IBIS::enforceConnectivity() {
     int nindex;
     const int dx4[4] = { -1,  0,  1,  0 };
     const int dy4[4] = { 0, -1,  0,  1 };
-    int* nlabels = new int[ size ];
     std::fill( nlabels, nlabels + size, -1 );
 
     oindex = 0;
@@ -333,8 +332,6 @@ void IBIS::enforceConnectivity() {
 
     for (i = 0; i < size; i++)
         labels[i] = nlabels[i];
-
-    delete[] nlabels;
 
 }
 
@@ -445,6 +442,8 @@ void IBIS::init() {
     updated_px = new bool[size];
     elligible = new int[size];
 
+    nlabels = new int[ size ];
+
     std::fill( labels, labels + size, -1 );
     std::fill( elligible, elligible + size, 0 );
 
@@ -552,7 +551,16 @@ void IBIS::global_mean_seeds() {
     memset( aseeds_Sum, 0, sizeof(float) * maxSPNumber );
     memset( bseeds_Sum, 0, sizeof(float) * maxSPNumber );
 
+    memset( Xseeds, 0, sizeof(float) * maxSPNumber );
+    memset( Yseeds, 0, sizeof(float) * maxSPNumber );
+    memset( lseeds, 0, sizeof(float) * maxSPNumber );
+    memset( aseeds, 0, sizeof(float) * maxSPNumber );
+    memset( bseeds, 0, sizeof(float) * maxSPNumber );
+
     int sp;
+#if THREAD_count > 1
+#pragma omp parallel for num_threads(THREAD_count)
+#endif
     for( int i=0; i<height; i++ ) {
         for( int j=0; j<width; j++ ) {
             sp = labels[ vertical_index[ i ] + j ];
@@ -567,12 +575,9 @@ void IBIS::global_mean_seeds() {
 
     }
 
-    memset( Xseeds, 0, sizeof(float) * maxSPNumber );
-    memset( Yseeds, 0, sizeof(float) * maxSPNumber );
-    memset( lseeds, 0, sizeof(float) * maxSPNumber );
-    memset( aseeds, 0, sizeof(float) * maxSPNumber );
-    memset( bseeds, 0, sizeof(float) * maxSPNumber );
-
+#if THREAD_count > 1
+#pragma omp parallel for num_threads(THREAD_count)
+#endif
     for( int i=0; i<SPNumber; i++ ) {
         if( countPx[ i ] > 0 ) {
             Xseeds[ i ] = Xseeds_Sum[ i ] / countPx[ i ];
@@ -627,9 +632,6 @@ void IBIS::process( cv::Mat* img ) {
         diff_frame();
 #endif
 
-        //imagesc( "elligible SP", elligible, width, height );
-        //cv::waitKey(1);
-
     }
 
     // STEP 2 : process IBIS
@@ -649,19 +651,15 @@ void IBIS::process( cv::Mat* img ) {
     lap = now_ms();
 #endif
 
-    /*imagesc("labels", labels, width, height);
-    cv::waitKey(0);
-
-    imagesc("refined labels", labels, width, height);
-    cv::waitKey(0);*/
-
     enforceConnectivity();
     update_adj();
     global_mean_seeds();
-
     memcpy( initial_repartition, labels, sizeof(int) * size );
 
     if( creation_deletion() ) {
+#if THREAD_count > 1
+#pragma omp parallel for num_threads(THREAD_count)
+#endif
         for( int i=0; i<count_mask; i++ )
             mask_buffer[ i ].reset();
 
@@ -680,7 +678,6 @@ void IBIS::process( cv::Mat* img ) {
     memcpy( bseeds_prev, bseeds, sizeof( float ) * maxSPNumber );
     memcpy( prev_adjacent_sp, adjacent_sp, sizeof( float ) * size_roi * maxSPNumber );
     memcpy( prev_count_adjacent, count_adjacent, sizeof( float ) * maxSPNumber );
-
 
 #if OUTPUT_log
     st4 = now_ms() - lap;
@@ -785,35 +782,32 @@ bool IBIS::creation_deletion() {
     }
 
     if( index_frame > 0 ) {
+
+#if THREAD_count > 1
+#pragma omp parallel for num_threads(THREAD_count)
+#endif
         for( int i=0; i<SPNumber; i++ ) {
             // test continuity
             if( !count_diff[ i ] ) {
-                /*dist = ( lseeds[ i ] - lseeds_prev[ i ] ) * ( lseeds[ i ] - lseeds_prev[ i ] ) +
-                       ( aseeds[ i ] - aseeds_prev[ i ] ) * ( aseeds[ i ] - aseeds_prev[ i ] ) +
-                       ( bseeds[ i ] - bseeds_prev[ i ] ) * ( bseeds[ i ] - bseeds_prev[ i ] );*/
+                best_value = -1;
+                D = 0;
 
-                //if( dist > 10.f ) {
-                    best_value = -1;
-                    D = 0;
+                for( int j=0; j<prev_count_adjacent[ i ]; j++ ) {
+                    biggest_sp = prev_adjacent_sp[ size_roi*i + j ];
 
-                    for( int j=0; j<prev_count_adjacent[ i ]; j++ ) {
-                        biggest_sp = prev_adjacent_sp[ size_roi*i + j ];
+                    conti = ( lseeds[ i ] - lseeds_prev[ biggest_sp ] ) * ( lseeds[ i ] - lseeds_prev[ biggest_sp ] ) +
+                            ( aseeds[ i ] - aseeds_prev[ biggest_sp ] ) * ( aseeds[ i ] - aseeds_prev[ biggest_sp ] ) +
+                            ( bseeds[ i ] - bseeds_prev[ biggest_sp ] ) * ( bseeds[ i ] - bseeds_prev[ biggest_sp ] );
 
-                        conti = ( lseeds[ i ] - lseeds_prev[ biggest_sp ] ) * ( lseeds[ i ] - lseeds_prev[ biggest_sp ] ) +
-                                ( aseeds[ i ] - aseeds_prev[ biggest_sp ] ) * ( aseeds[ i ] - aseeds_prev[ biggest_sp ] ) +
-                                ( bseeds[ i ] - bseeds_prev[ biggest_sp ] ) * ( bseeds[ i ] - bseeds_prev[ biggest_sp ] );
-
-                        if( best_value < 0 || conti < D ) {
-                            best_value = biggest_sp;
-                            D = conti;
-
-                        }
+                    if( best_value < 0 || conti < D ) {
+                        best_value = biggest_sp;
+                        D = conti;
 
                     }
 
-                    inheritance[ i ] = best_value;
+                }
 
-                //}
+                inheritance[ i ] = best_value;
 
             }
 

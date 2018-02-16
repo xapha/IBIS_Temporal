@@ -197,9 +197,9 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
     }
 
-    float* R = new float[Super_Pixel->getMaxSPNumber()];
-    float* G = new float[Super_Pixel->getMaxSPNumber()];
-    float* B = new float[Super_Pixel->getMaxSPNumber()];
+    float* R;// = new float[Super_Pixel->getMaxSPNumber()];
+    float* G;// = new float[Super_Pixel->getMaxSPNumber()];
+    float* B;// = new float[Super_Pixel->getMaxSPNumber()];
 
     float* R_avg = new float[Super_Pixel->getMaxSPNumber()];
     float* G_avg = new float[Super_Pixel->getMaxSPNumber()];
@@ -208,7 +208,7 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
     memset( G_avg, 0, sizeof(float) * Super_Pixel->getMaxSPNumber() );
     memset( B_avg, 0, sizeof(float) * Super_Pixel->getMaxSPNumber() );
 
-    for (i=0; i<Super_Pixel->getMaxSPNumber(); i++) {
+    /*for (i=0; i<Super_Pixel->getMaxSPNumber(); i++) {
         sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 0 ] /= count_px[ i ];
         sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 1 ] /= count_px[ i ];
         sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 2 ] /= count_px[ i ];
@@ -217,7 +217,11 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
         G[i] = sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 1 ];
         B[i] = sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 0 ];
 
-    }
+    }*/
+
+    R = Super_Pixel->get_lseeds();
+    G = Super_Pixel->get_aseeds();
+    B = Super_Pixel->get_bseeds();
 
     // increase stat
     int* adj = Super_Pixel->get_adjacent_sp();
@@ -260,8 +264,9 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
     Signal->process();
 #endif
-    if( frame_index % 5 == 0 ) {
+    if( frame_index % 30 == 0 ) {
         printf("-frame\t%i\n", frame_index);
+
     }
 
 #if visu
@@ -340,9 +345,9 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
     delete output_bounds;
     delete[] sum_rgb;
     delete[] count_px;
-    delete[] R;
-    delete[] G;
-    delete[] B;
+    //delete[] R;
+    //delete[] G;
+    //delete[] B;
     delete[] R_avg;
     delete[] G_avg;
     delete[] B_avg;
@@ -484,12 +489,14 @@ int main( int argc, char* argv[] )
         int ii=0;
         std::string output_basename = get_name( argv[3] );
 
+#if SAVE_output
         if( type == 1 ) {
             char command[255] = {0};
             sprintf( command, "mkdir -p results/%s\n", output_basename.c_str() );
             system( command );
 
         }
+#endif
 
         while( video.read( img ) ) {
             execute_IBIS( K, compa, &Super_Pixel, &Signal, &img, output_basename, ii );
