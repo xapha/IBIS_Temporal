@@ -20,7 +20,7 @@
 #include "utils.h"
 #include "signal_processing.h"
 
-#define SAVE_output         0
+#define SAVE_output         1
 #define visu                1
 #define signal_size         300
 #define signal_processing   1
@@ -197,9 +197,9 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
     }
 
-    float* R;// = new float[Super_Pixel->getMaxSPNumber()];
-    float* G;// = new float[Super_Pixel->getMaxSPNumber()];
-    float* B;// = new float[Super_Pixel->getMaxSPNumber()];
+    float* R = new float[Super_Pixel->getMaxSPNumber()];
+    float* G = new float[Super_Pixel->getMaxSPNumber()];
+    float* B = new float[Super_Pixel->getMaxSPNumber()];
 
     float* R_avg = new float[Super_Pixel->getMaxSPNumber()];
     float* G_avg = new float[Super_Pixel->getMaxSPNumber()];
@@ -208,7 +208,7 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
     memset( G_avg, 0, sizeof(float) * Super_Pixel->getMaxSPNumber() );
     memset( B_avg, 0, sizeof(float) * Super_Pixel->getMaxSPNumber() );
 
-    /*for (i=0; i<Super_Pixel->getMaxSPNumber(); i++) {
+    for (i=0; i<Super_Pixel->getMaxSPNumber(); i++) {
         sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 0 ] /= count_px[ i ];
         sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 1 ] /= count_px[ i ];
         sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 2 ] /= count_px[ i ];
@@ -217,11 +217,11 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
         G[i] = sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 1 ];
         B[i] = sum_rgb[ i + Super_Pixel->getMaxSPNumber() * 0 ];
 
-    }*/
+    }
 
-    R = Super_Pixel->get_lseeds();
+    /*R = Super_Pixel->get_lseeds();
     G = Super_Pixel->get_aseeds();
-    B = Super_Pixel->get_bseeds();
+    B = Super_Pixel->get_bseeds();*/
 
     // increase stat
     int* adj = Super_Pixel->get_adjacent_sp();
@@ -345,9 +345,9 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
     delete output_bounds;
     delete[] sum_rgb;
     delete[] count_px;
-    //delete[] R;
-    //delete[] G;
-    //delete[] B;
+    delete[] R;
+    delete[] G;
+    delete[] B;
     delete[] R_avg;
     delete[] G_avg;
     delete[] B_avg;

@@ -782,6 +782,8 @@ bool IBIS::creation_deletion() {
     }
 
     if( index_frame > 0 ) {
+        float invwt_1 = (float)SPTypicalLength / 20;
+        invwt_1 = 1.0f / (invwt_1 * invwt_1);
 
 #if THREAD_count > 1
 #pragma omp parallel for num_threads(THREAD_count)
@@ -795,9 +797,14 @@ bool IBIS::creation_deletion() {
                 for( int j=0; j<prev_count_adjacent[ i ]; j++ ) {
                     biggest_sp = prev_adjacent_sp[ size_roi*i + j ];
 
+                    dist = ( Xseeds[ i ] - Xseeds_prev[ biggest_sp ] ) * ( Xseeds[ i ] - Xseeds_prev[ biggest_sp ] ) +
+                           ( Yseeds[ i ] - Yseeds_prev[ biggest_sp ] ) * ( Yseeds[ i ] - Yseeds_prev[ biggest_sp ] );
+
                     conti = ( lseeds[ i ] - lseeds_prev[ biggest_sp ] ) * ( lseeds[ i ] - lseeds_prev[ biggest_sp ] ) +
                             ( aseeds[ i ] - aseeds_prev[ biggest_sp ] ) * ( aseeds[ i ] - aseeds_prev[ biggest_sp ] ) +
                             ( bseeds[ i ] - bseeds_prev[ biggest_sp ] ) * ( bseeds[ i ] - bseeds_prev[ biggest_sp ] );
+
+                    conti += dist * invwt_1;
 
                     if( best_value < 0 || conti < D ) {
                         best_value = biggest_sp;

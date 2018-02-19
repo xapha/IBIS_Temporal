@@ -24,6 +24,7 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     buff_HR = new double[ max_SP * size_signals ];
     fundamental = new float[ max_SP ];
     SNR = new float[ max_SP ];
+    mean_HR = new float[ max_SP ];
     HR_final = new int[ size_signals ];
     signal = new float[ size_signals ];
     visu_signal = new float[ size_signals ];
@@ -63,6 +64,7 @@ Signal_processing::~Signal_processing() {
     delete[] SNR;
     delete[] buff_HR;
     delete[] HR_final;
+    delete[] mean_HR;
 
     delete[] signal;
     delete[] visu_signal;
@@ -158,7 +160,8 @@ void Signal_processing::process() {
             else
                 circular_SNR[ max_SP * temp_index + i ] = compute_SNR( fft_data, size_signals, int( round( d_width ) ), 2, 0 );
 
-            SNR[i] += circular_SNR[ max_SP * temp_index + i ];
+            SNR[ i ] += circular_SNR[ max_SP * temp_index + i ];
+            mean_HR[ i ] += circular_fundamental[ max_SP * temp_index + i ];
 
         }
 
@@ -178,6 +181,7 @@ void Signal_processing::process() {
         float sum_weight=0.f;
         for( int i=0; i<nb_sp; i++ ) {
             SNR[i] = SNR[i] / count_SNR;
+            mean_HR[ i ] /= count_SNR;
 
             weight[i] = pow( 10.0, double(SNR[i])/6 );
             sum_weight += weight[i];
@@ -211,21 +215,34 @@ void Signal_processing::process() {
         int histo_freq[size_signals] = {0};
         for( int i=0; i<nb_sp; i++ ) {
             if( int( round( double( 10*SNR[i] ) ) > 0 ) ) {
-                histo_freq[ int(round(circular_fundamental[ max_SP * temp_index + i ])) ] += 6*int( round( double( SNR[i] ) ) );
+                histo_freq[ int(round(mean_HR[ i ])) ] += 6*int( round( double( SNR[i] ) ) );
 
             }
 
         }
 
-        int repart[ 200 * 200 ] = {0};
-        for( int i=0; i<nb_sp; i++ ) {
-            if( int(round(circular_fundamental[ max_SP * temp_index + i ])) > 0 && int(round(circular_fundamental[ max_SP * temp_index + i ])) < 200 && int( round( double( SNR[i] ) ) ) > 0 ) {
-                int temp = int(round(circular_fundamental[ max_SP * temp_index + i ]));
-                repart[ int(round(circular_fundamental[ max_SP * temp_index + i ])) + 200 * ( 200 - int( round( double( 10*SNR[i] ) ) ) ) ] = 1;
+        // detect independent HR
+        int tentative_HR[20] = {0};
+        int nb_tentative = 0;
+        for( int i=0; i<size_signals; i++ ) {
+            if( histo_freq[i] > 0 ) {
+                tentative_HR[ nb_tentative ] = histo_freq[i];
+                nb_tentative++;
 
             }
-            else if( int(round(circular_fundamental[ max_SP * temp_index + i ])) < 0 )
-                printf("invalid freq measure : %i\n", int(round(circular_fundamental[ max_SP * temp_index + i ])));
+
+        }
+        printf(" tentative HR %i\n", nb_tentative);
+
+        int repart[ 200 * 200 ] = {0};
+        for( int i=0; i<nb_sp; i++ ) {
+            if( int(round(mean_HR[ i ])) > 0 && int(round(mean_HR[ i ])) < 200 && int( round( double( SNR[i] ) ) ) > 0 ) {
+                int temp = int(round(mean_HR[ i ]));
+                repart[ int(round(mean_HR[ i ])) + 200 * ( 200 - int( round( double( 10*SNR[i] ) ) ) ) ] = 1;
+
+            }
+            else if( int(round(mean_HR[ i ])) < 0 )
+                printf("invalid freq measure : %i\n", int(round(mean_HR[ i ])));
 
         }
 
@@ -291,7 +308,7 @@ void Signal_processing::construct_signal() {
     memset( SNR, 0, sizeof(float) * max_SP );
     float c1, c2, c3;
 
-//#pragma omp parallel for num_threads(4)
+#pragma omp parallel for num_threads(4)
     for( int j=0; j<nb_sp; j++ ) {
          parent_index = j;
 
@@ -316,6 +333,7 @@ void Signal_processing::construct_signal() {
             // construct SNR_history
             if( circular_SNR[ max_SP * temp_index + parent_index ] != 0 ) {
                 SNR[ j ] += circular_SNR[ max_SP * temp_index + parent_index ];
+                mean_HR[ j ] += circular_fundamental[ max_SP * temp_index + parent_index ];
 
             }
 
@@ -389,7 +407,7 @@ void Signal_processing::construct_signal() {
         //-- -- -- -- -- iPBV
         if( index_processed == 1 ) {
             //Xs && Ys
-            /*for(int i=0; i<size_signals; i++) {
+            for(int i=0; i<size_signals; i++) {
                 Xf[i] = 3*C1[i]-2*C2[i];
                 Yf[i] = 1.5*C1[i]+C2[i]-1.5*C3[i];
 
@@ -398,7 +416,7 @@ void Signal_processing::construct_signal() {
             double std_xf = gsl_stats_sd(Xf, 1, size_signals);
             double std_yf = gsl_stats_sd(Yf, 1, size_signals);
 
-            alpha = std_xf / std_yf;*/
+            alpha = std_xf / std_yf;
 
             cv::Mat_<double> ref( 1, size_signals );
             cv::Mat_<double> sig( 3, size_signals ); // 3 * S
@@ -408,14 +426,14 @@ void Signal_processing::construct_signal() {
 
             cv::Mat_<double> Pbv( 1, 3 );
 
-            double std_xf = gsl_stats_sd(C2, 1, size_signals);
-            double std_yf = gsl_stats_sd(C3, 1, size_signals);
+//            double std_xf = gsl_stats_sd(C2, 1, size_signals);
+//            double std_yf = gsl_stats_sd(C3, 1, size_signals);
 
-            alpha = std_xf / std_yf;
+//            alpha = std_xf / std_yf;
 
             for( int i=0; i<size_signals-1; i++ ) {
-                //ref(0, i) = -( Xf[i] - alpha*Yf[i] );
-                ref(0, i) = C2[ i ] - alpha*C3[ i ];
+                ref(0, i) = -( Xf[i] - alpha*Yf[i] );
+                //ref(0, i) = C2[ i ] - alpha*C3[ i ];
 
                 sig(0, i) = C1[i];
                 sig(1, i) = C2[i];

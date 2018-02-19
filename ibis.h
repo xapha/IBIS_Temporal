@@ -34,7 +34,7 @@
 #define MASK_chrono         0       // 0:1 provide more informations ( complexity, process burden repartition ) : slow down the process !
 #define VISU                0       // show processed pixels for each iterations
 #define VISU_all            0       // for mask by mask visu of the processing : THREAD_count = 0, very slow
-#define OUTPUT_log          1       // 0:1 print output log
+#define OUTPUT_log          0       // 0:1 print output log
 
 // temporal
 #define fixed_background    1

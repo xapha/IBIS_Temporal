@@ -63,6 +63,7 @@ private:
     int* circular_parent;
     float* circular_SNR;
     float* SNR;
+    float* mean_HR;
     double* buff_HR;
     int* HR_final;
     double* circular_fundamental;
