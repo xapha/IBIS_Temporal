@@ -46,6 +46,7 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     memset(buff_HR, 0, sizeof(int) * max_SP * size_signals );
 
     PBV = new double[3*max_SP];
+    color = new int[ max_SP ];
 
 }
 
@@ -73,6 +74,7 @@ Signal_processing::~Signal_processing() {
     delete[] fft_buff;
     delete[] variance;
     delete[] PBV;
+    delete[] color;
 
 }
 
@@ -176,19 +178,19 @@ void Signal_processing::process() {
 
         }
 
-        float max_SNR=0;
+        /*float max_SNR=0;
         float weight[nb_sp] = {0.f};
-        float sum_weight=0.f;
+        float sum_weight=0.f;*/
         for( int i=0; i<nb_sp; i++ ) {
             SNR[i] = SNR[i] / count_SNR;
             mean_HR[ i ] /= count_SNR;
 
-            weight[i] = pow( 10.0, double(SNR[i])/6 );
-            sum_weight += weight[i];
+            //weight[i] = pow( 10.0, double(SNR[i])/6 );
+            //sum_weight += weight[i];
 
         }
 
-        memset( fft_data, 0, sizeof(double)*size_signals );
+        /*memset( fft_data, 0, sizeof(double)*size_signals );
 
         for( int i=0; i<nb_sp; i++ ) {
             for( int j=0; j<size_signals; j++ ) {
@@ -202,9 +204,9 @@ void Signal_processing::process() {
         }
 
         CvPlot::clear("fft");
-        CvPlot::plot( "fft", fft_data, size_signals );
+        CvPlot::plot( "fft", fft_data, size_signals );*/
 
-        HR = round( float(gsl_stats_max_index( fft_data, 1, size_signals )) * 30.f * float( FS / float( size_signals ) ) );
+        //HR = round( float(gsl_stats_max_index( fft_data, 1, size_signals )) * 30.f * float( FS / float( size_signals ) ) );
 
         for( int j=0; j<size_signals; j++ ) {
             visu_signal[ j ] = buff_signals[ max_SP * j + 75 ];
@@ -212,27 +214,202 @@ void Signal_processing::process() {
         }
         visu_signal[0] = 0;
 
-        int histo_freq[size_signals] = {0};
+        memset( HR_final, 0, sizeof( int ) * size_signals );
+        int count_sp=0;
         for( int i=0; i<nb_sp; i++ ) {
-            if( int( round( double( 10*SNR[i] ) ) > 0 ) ) {
-                histo_freq[ int(round(mean_HR[ i ])) ] += 6*int( round( double( SNR[i] ) ) );
+            if( SNR[i] > 0 ) {
+                HR_final[ int(round(mean_HR[ i ])) ] += 6*int( round( double( SNR[i] ) ) );
+                count_sp++;
 
             }
 
         }
+
+        // PCA
+        cv::Mat A( count_sp, 4, CV_32F );
+        cv::Mat C( count_sp, count_sp, CV_32F );
+        cv::Mat u( count_sp, 1, CV_32F );
+        cv::Mat v( count_sp, count_sp, CV_32F );
+        cv::Mat w( count_sp, count_sp, CV_32F );
+
+        int index_sp=0;
+        int corresp[ count_sp ];
+        for( int i=0; i< nb_sp; i++ ) {
+            if( SNR[i] > 0 ) {
+                A.at<float>( index_sp, 0 ) = SNR[i] * ( circular_data_c1[ max_SP * temp_index + i ] / 255 );
+                A.at<float>( index_sp, 1 ) = SNR[i] * ( circular_data_c2[ max_SP * temp_index + i ] / 255 );
+                A.at<float>( index_sp, 2 ) = SNR[i] * ( circular_data_c3[ max_SP * temp_index + i ] / 255 );
+                A.at<float>( index_sp, 3 ) = SNR[i] * ( mean_HR[ i ] / size_signals );
+
+                corresp[ index_sp ] = i;
+
+                if( index_sp >= count_sp )
+                    printf("!!!!!!!!!\n");
+
+                index_sp++;
+
+            }
+
+        }
+
+        C = A * A.t();
+        cv::SVD::compute( C, u, v, w );
+        //cv::eigen( C, u, v );
+
+        CvPlot::clear("SVD value");
+        int ii = 0;
+        memset(color, 0, sizeof(int) * max_SP);
+
+        int count_signature = 0;
+        int signatures[ count_sp ];
+        for( int j=1; j<count_sp; j++ ) {
+
+            bool pos=true;
+            for( int k=1; k<count_sp; k++ ) {
+                if( v.at<float>( k,j ) < 0 ) {
+                    pos = false;
+                    break;
+                }
+            }
+
+            if( pos ) {
+                signatures[count_signature] = j;
+                count_signature++;
+            }
+            else
+                break;
+
+        }
+
+        cv::Mat ref_S( count_signature, 4, CV_32F );
+
+        float color_dist[count_sp] = {0.f};
+        for( int k=0; k<count_signature; k++ ) {
+            cv::Mat S( 1, 4, CV_32F );
+            cv::Mat u_0( count_sp, 1, CV_32F );
+            cv::Mat out_0( 1, count_sp, CV_32F );
+            for( int i=0; i<count_sp; i++ )
+                u_0.at<float>( i, 0 ) = v.at<float>(i,signatures[k]);
+
+            S = u_0.t() * A;
+            float norm_s = float( sqrt( double( S.at<float>(0, 0) * S.at<float>(0, 0) +
+                                                S.at<float>(0, 1) * S.at<float>(0, 1) +
+                                                S.at<float>(0, 2) * S.at<float>(0, 2) +
+                                                S.at<float>(0, 3) * S.at<float>(0, 3) ) ) );
+            S = 1/norm_s * S;
+
+            ref_S.at<float>(ii, 0) = S.at<float>(0, 0);
+            ref_S.at<float>(ii, 1) = S.at<float>(0, 1);
+            ref_S.at<float>(ii, 2) = S.at<float>(0, 2);
+            ref_S.at<float>(ii, 3) = S.at<float>(0, 3);
+
+            out_0 = S * A.t();
+            norm_s = 0.f;
+            for( int i=0; i<count_sp; i++ )
+                norm_s += out_0.at<float>(0, i) * out_0.at<float>(0, i);
+
+            norm_s = float( sqrt( double( norm_s ) ) );
+            out_0 /= norm_s;
+
+            float out_hr = 0.f;
+            float sum_hr = 0.f;
+            for( int i=0; i<count_sp; i++ ) {
+                signal[ i ] = out_0.at<float>(0,i);
+                if( signal[ i ] < 0 )
+                    signal[ i ] = -signal[ i ];
+
+                float weight = out_0.at<float>(0,i);
+
+                if( weight < 0 )
+                    weight = -weight;
+
+                out_hr += weight * mean_HR[ corresp[ i ] ];
+                sum_hr += weight;
+
+                if( color_dist[ i ] < weight ) {
+                    color_dist[ i ] = weight;
+                    color[ corresp[i] ] == ii;
+
+                }
+
+            }
+
+            CvPlot::plot( "SVD value", signal, count_sp );
+
+            printf(" ---- > Signature %i : (%f, %f, %f, %f) \n",
+                   ii,
+                   S.at<float>(0,0),
+                   S.at<float>(0,1),
+                   S.at<float>(0,2),
+                   S.at<float>(0,3) );
+            printf(" ---- -> HR : %f bpm\n", ( out_hr / sum_hr ) * 30.f * float( FS / float( size_signals ) ) );
+
+            ii++;
+
+        }
+
+        // check correlation between signature and initial vectors
+        int nb_s[ count_signature ] = {0};
+        for( int j=0; j<count_sp; j++ ) {
+            float c_dist = 0.f;
+            int best_color;
+
+            for( int i=0; i<count_signature; i++ ) {
+                /*float correlation = ( ref_S.at<float>( i,0 ) - A.at<float>( j,0 ) ) * ( ref_S.at<float>( i,0 ) - A.at<float>( j,0 ) ) +
+                                    ( ref_S.at<float>( i,1 ) - A.at<float>( j,1 ) ) * ( ref_S.at<float>( i,1 ) - A.at<float>( j,1 ) ) +
+                                    ( ref_S.at<float>( i,2 ) - A.at<float>( j,2 ) ) * ( ref_S.at<float>( i,2 ) - A.at<float>( j,2 ) ) +
+                                    ( ref_S.at<float>( i,3 ) - A.at<float>( j,3 ) ) * ( ref_S.at<float>( i,3 ) - A.at<float>( j,3 ) );
+*/
+                cv::Mat ref( 1, 4, CV_32F );
+                cv::Mat te( 1, 4, CV_32F );
+
+                ref.at<float>( 0,0 ) = ref_S.at<float>( i,0 );
+                ref.at<float>( 0,1 ) = ref_S.at<float>( i,1 );
+                ref.at<float>( 0,2 ) = ref_S.at<float>( i,2 );
+                ref.at<float>( 0,3 ) = ref_S.at<float>( i,3 );
+
+                te.at<float>( 0,0 ) = A.at<float>( j,0 );
+                te.at<float>( 0,1 ) = A.at<float>( j,1 );
+                te.at<float>( 0,2 ) = A.at<float>( j,2 );
+                te.at<float>( 0,3 ) = A.at<float>( j,3 );
+
+                float correlation = float( ref.dot( te ) );
+
+                if( i == 0 || correlation < c_dist ) {
+                    best_color = i;
+                    c_dist = correlation;
+
+                }
+
+            }
+
+            color[ corresp[ j ] ] = best_color;
+            nb_s[ best_color ]++;
+
+        }
+
+        cv::waitKey(1);
 
         // detect independent HR
         int tentative_HR[20] = {0};
         int nb_tentative = 0;
+        int energic=0;
+        int energic_id=0;
         for( int i=0; i<size_signals; i++ ) {
-            if( histo_freq[i] > 0 ) {
-                tentative_HR[ nb_tentative ] = histo_freq[i];
+            if( HR_final[i] > 0 ) {
+                tentative_HR[ nb_tentative ] = HR_final[i];
                 nb_tentative++;
+
+                if( HR_final[i] > energic ) {
+                    energic = HR_final[i];
+                    energic_id = i;
+                }
 
             }
 
         }
-        printf(" tentative HR %i\n", nb_tentative);
+        HR = int( round( energic_id * 30.f * float( FS / float( size_signals ) ) ) );
+        //printf(" tentative HR %i, most energic: %i bpm\n", nb_tentative, HR );
 
         int repart[ 200 * 200 ] = {0};
         for( int i=0; i<nb_sp; i++ ) {
@@ -249,7 +426,7 @@ void Signal_processing::process() {
         imagesc( "repart freq", repart, 200, 200 );
 
         CvPlot::clear("histo_freq");
-        CvPlot::plot( "histo_freq", histo_freq, size_signals );
+        CvPlot::plot( "histo_freq", HR_final, size_signals );
 
         CvPlot::clear("1-Variance");
         CvPlot::plot( "1-Variance", variance, nb_sp );
@@ -308,7 +485,7 @@ void Signal_processing::construct_signal() {
     memset( SNR, 0, sizeof(float) * max_SP );
     float c1, c2, c3;
 
-#pragma omp parallel for num_threads(4)
+//#pragma omp parallel for num_threads(4)
     for( int j=0; j<nb_sp; j++ ) {
          parent_index = j;
 
@@ -388,7 +565,7 @@ void Signal_processing::construct_signal() {
         //-- -- -- -- -- CHROM
 
         //Xs && Ys
-        /*for(int i=0; i<size_signals; i++) {
+        for(int i=0; i<size_signals; i++) {
             Xf[i] = 3*C1[i]-2*C2[i];
             Yf[i] = 1.5*C1[i]+C2[i]-1.5*C3[i];
 
@@ -402,102 +579,102 @@ void Signal_processing::construct_signal() {
         for( int i=0; i<size_signals-1; i++ ) {
             buff_signals[ max_SP * i + j ] = float( Xf[i] - alpha*Yf[i] );
 
-        }*/
+        }
 
         //-- -- -- -- -- iPBV
-        if( index_processed == 1 ) {
-            //Xs && Ys
-            for(int i=0; i<size_signals; i++) {
-                Xf[i] = 3*C1[i]-2*C2[i];
-                Yf[i] = 1.5*C1[i]+C2[i]-1.5*C3[i];
+//        if( index_processed == 1 ) {
+//            //Xs && Ys
+//            for(int i=0; i<size_signals; i++) {
+//                Xf[i] = 3*C1[i]-2*C2[i];
+//                Yf[i] = 1.5*C1[i]+C2[i]-1.5*C3[i];
 
-            }
+//            }
 
-            double std_xf = gsl_stats_sd(Xf, 1, size_signals);
-            double std_yf = gsl_stats_sd(Yf, 1, size_signals);
-
-            alpha = std_xf / std_yf;
-
-            cv::Mat_<double> ref( 1, size_signals );
-            cv::Mat_<double> sig( 3, size_signals ); // 3 * S
-
-            cv::Mat_<double> buff_3_3( 3, 3 ); // 3 * 3
-            cv::Mat_<double> buff_1_3( 1, 3 ); // 1 * 3
-
-            cv::Mat_<double> Pbv( 1, 3 );
-
-//            double std_xf = gsl_stats_sd(C2, 1, size_signals);
-//            double std_yf = gsl_stats_sd(C3, 1, size_signals);
+//            double std_xf = gsl_stats_sd(Xf, 1, size_signals);
+//            double std_yf = gsl_stats_sd(Yf, 1, size_signals);
 
 //            alpha = std_xf / std_yf;
 
-            for( int i=0; i<size_signals-1; i++ ) {
-                ref(0, i) = -( Xf[i] - alpha*Yf[i] );
-                //ref(0, i) = C2[ i ] - alpha*C3[ i ];
+//            cv::Mat_<double> ref( 1, size_signals );
+//            cv::Mat_<double> sig( 3, size_signals ); // 3 * S
 
-                sig(0, i) = C1[i];
-                sig(1, i) = C2[i];
-                sig(2, i) = C3[i];
+//            cv::Mat_<double> buff_3_3( 3, 3 ); // 3 * 3
+//            cv::Mat_<double> buff_1_3( 1, 3 ); // 1 * 3
 
-            }
+//            cv::Mat_<double> Pbv( 1, 3 );
 
-            // compute first PBV
-            Pbv = ref * sig.t();
-            buff_3_3 = ( sig * sig.t() ).inv();
-            buff_1_3 = Pbv * buff_3_3;
+////            double std_xf = gsl_stats_sd(C2, 1, size_signals);
+////            double std_yf = gsl_stats_sd(C3, 1, size_signals);
 
-            ref = buff_1_3 * sig;
-            for( int i=0; i<size_signals-1; i++ ) {
-                float a = float( ref(0, i) );
-                buff_signals[ max_SP * i + j ] = a;
+////            alpha = std_xf / std_yf;
 
-            }
+//            for( int i=0; i<size_signals-1; i++ ) {
+//                ref(0, i) = -( Xf[i] - alpha*Yf[i] );
+//                //ref(0, i) = C2[ i ] - alpha*C3[ i ];
 
-            PBV[max_SP*0 + j] = Pbv(0, 0);
-            PBV[max_SP*1 + j] = Pbv(0, 1);
-            PBV[max_SP*2 + j] = Pbv(0, 2);
+//                sig(0, i) = C1[i];
+//                sig(1, i) = C2[i];
+//                sig(2, i) = C3[i];
 
-        }
-        else {
-            cv::Mat_<double> ref( 1, size_signals );
-            cv::Mat_<double> sig( 3, size_signals ); // 3 * S
+//            }
 
-            cv::Mat_<double> buff_3_3( 3, 3 ); // 3 * 3
-            cv::Mat_<double> buff_1_3( 1, 3 ); // 1 * 3
+//            // compute first PBV
+//            Pbv = ref * sig.t();
+//            buff_3_3 = ( sig * sig.t() ).inv();
+//            buff_1_3 = Pbv * buff_3_3;
 
-            cv::Mat_<double> Pbv( 1, 3 );
+//            ref = buff_1_3 * sig;
+//            for( int i=0; i<size_signals-1; i++ ) {
+//                float a = float( ref(0, i) );
+//                buff_signals[ max_SP * i + j ] = a;
 
-            for( int i=0; i<size_signals-1; i++ ) {
-                sig(0, i) = C1[i];
-                sig(1, i) = C2[i];
-                sig(2, i) = C3[i];
+//            }
 
-            }
+//            PBV[max_SP*0 + j] = Pbv(0, 0);
+//            PBV[max_SP*1 + j] = Pbv(0, 1);
+//            PBV[max_SP*2 + j] = Pbv(0, 2);
 
-            // compute first PBV
-            Pbv(0, 0) = PBV[max_SP*0 + j];
-            Pbv(0, 1) = PBV[max_SP*1 + j];
-            Pbv(0, 2) = PBV[max_SP*2 + j];
+//        }
+//        else {
+//            cv::Mat_<double> ref( 1, size_signals );
+//            cv::Mat_<double> sig( 3, size_signals ); // 3 * S
 
-            buff_3_3 = ( sig * sig.t() ).inv();
-            buff_1_3 = Pbv * buff_3_3;
+//            cv::Mat_<double> buff_3_3( 3, 3 ); // 3 * 3
+//            cv::Mat_<double> buff_1_3( 1, 3 ); // 1 * 3
 
-            ref = buff_1_3 * sig;
-            for( int i=0; i<size_signals-1; i++ )
-                buff_signals[ max_SP * i + j ] = float( ref( 0, i ) );
+//            cv::Mat_<double> Pbv( 1, 3 );
 
-            Pbv = ref * sig.t();
+//            for( int i=0; i<size_signals-1; i++ ) {
+//                sig(0, i) = C1[i];
+//                sig(1, i) = C2[i];
+//                sig(2, i) = C3[i];
 
-            double alpha = 0.99;
-            PBV[max_SP*0 + j] = alpha*PBV[max_SP*0 + j] + ( 1 - alpha )*Pbv(0, 0);
-            PBV[max_SP*1 + j] = alpha*PBV[max_SP*1 + j] + ( 1 - alpha )*Pbv(0, 1);
-            PBV[max_SP*2 + j] = alpha*PBV[max_SP*2 + j] + ( 1 - alpha )*Pbv(0, 2);
+//            }
 
-            /*PBV[max_SP*0 + j] = Pbv(0, 0);
-            PBV[max_SP*1 + j] = Pbv(0, 1);
-            PBV[max_SP*2 + j] = Pbv(0, 2);*/
+//            // compute first PBV
+//            Pbv(0, 0) = PBV[max_SP*0 + j];
+//            Pbv(0, 1) = PBV[max_SP*1 + j];
+//            Pbv(0, 2) = PBV[max_SP*2 + j];
 
-        }
+//            buff_3_3 = ( sig * sig.t() ).inv();
+//            buff_1_3 = Pbv * buff_3_3;
+
+//            ref = buff_1_3 * sig;
+//            for( int i=0; i<size_signals-1; i++ )
+//                buff_signals[ max_SP * i + j ] = float( ref( 0, i ) );
+
+//            Pbv = ref * sig.t();
+
+//            double alpha = 0.99;
+//            PBV[max_SP*0 + j] = alpha*PBV[max_SP*0 + j] + ( 1 - alpha )*Pbv(0, 0);
+//            PBV[max_SP*1 + j] = alpha*PBV[max_SP*1 + j] + ( 1 - alpha )*Pbv(0, 1);
+//            PBV[max_SP*2 + j] = alpha*PBV[max_SP*2 + j] + ( 1 - alpha )*Pbv(0, 2);
+
+//            /*PBV[max_SP*0 + j] = Pbv(0, 0);
+//            PBV[max_SP*1 + j] = Pbv(0, 1);
+//            PBV[max_SP*2 + j] = Pbv(0, 2);*/
+
+//        }
 
     }
 

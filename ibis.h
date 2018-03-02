@@ -28,7 +28,7 @@
 #include "utils.h"
 
 // algo debug parameters
-#define THREAD_count        4       // deactivated if <= 1
+#define THREAD_count        0       // deactivated if <= 1
 #define size_roi            9       // 9 25 49 : consider adjacent seeds for pixels assignation
 #define MATLAB_lab          0       // 0=>RGB2LAB : l,a,b -> 0-255. 1=>RGB2LAB : l -> 0-100; a,b -> -127:127
 #define MASK_chrono         0       // 0:1 provide more informations ( complexity, process burden repartition ) : slow down the process !

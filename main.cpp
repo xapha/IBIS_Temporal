@@ -20,7 +20,7 @@
 #include "utils.h"
 #include "signal_processing.h"
 
-#define SAVE_output         1
+#define SAVE_output         0
 #define visu                1
 #define signal_size         300
 #define signal_processing   1
@@ -299,14 +299,17 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
 #if signal_processing
                 if( frame_index > signal_size ) {
-                    if( SNR[ labels[ii] ] > 0 && ubuff[ ii ] == 255 ) {
-                        if( SNR[ labels[ii] ] > 5 )
-                            pImg->ptr()[i + 2]  = 255;
-                        else
-                            pImg->ptr()[i + 2]  = (unsigned char)(255 * SNR[ labels[ii] ] / 5 );
+                    int* color = Signal->get_color();
 
+                    if( SNR[ labels[ii] ] > 0 && ubuff[ ii ] == 255 ) {
+                        pImg->ptr()[i + 2]  = 0;
                         pImg->ptr()[i + 1]  = 0;
                         pImg->ptr()[i]      = 0;
+
+                        if( SNR[ labels[ii] ] > 5 )
+                            pImg->ptr()[i + color[ labels[ii] ]]  = 255;
+                        else
+                            pImg->ptr()[i + color[ labels[ii] ]]  = (unsigned char)(255 * SNR[ labels[ii] ] / 5 );
 
                     }
 
@@ -318,7 +321,7 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
         }
 
 
-    //#if signal_processing
+#if signal_processing
         // add text
         char text[255] = "";
         sprintf( text, "HR: %i", Signal->get_HR() );
@@ -333,7 +336,7 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
 
         }*/
-    //#endif
+#endif
 
         cv::imshow("rgb mean", *pImg);
         cv::waitKey( 1 );

@@ -45,6 +45,7 @@ public:
     float* get_C1() { return buff_signals_c1; }
     float* get_C2() { return buff_signals_c2; }
     float* get_C3() { return buff_signals_c3; }
+    int* get_color() { return color; }
 
 private:
     int index_processed;
@@ -74,6 +75,7 @@ private:
     double* fft_data;
     double* fft_buff;
     double* variance;
+    int* color;
 
     //iPBV
     double* PBV;
