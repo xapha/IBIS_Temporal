@@ -33,6 +33,7 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     fft_buff = new double[ size_signals * max_SP ];
     variance = new double[ max_SP ];
 
+    memset(mean_HR, 0, sizeof(float) * max_SP);
     memset(buff_signals, 0, sizeof(float) * max_SP * size_signals );
     memset(buff_signals_c1, 0, sizeof(float) * max_SP * size_signals );
     memset(buff_signals_c2, 0, sizeof(float) * max_SP * size_signals );
@@ -44,6 +45,7 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     memset(circular_parent, 0, sizeof(int) * max_SP * size_signals );
     memset(HR_final, 0, sizeof(int) * size_signals );
     memset(buff_HR, 0, sizeof(int) * max_SP * size_signals );
+    memset(circular_fundamental, 0, sizeof(double) * max_SP * size_signals);
 
     PBV = new double[3*max_SP];
     color = new int[ max_SP ];
@@ -119,7 +121,7 @@ void Signal_processing::process() {
             if( stat )
                 variance[ i ] = gsl_stats_variance( fft_data, 1, size_signals );
             else
-                variance[ 1 ] = 0;
+                variance[ i ] = 0;
 
             if( variance[ i ] > max_variance )
                 max_variance = variance[ i ];
@@ -226,7 +228,7 @@ void Signal_processing::process() {
         }
 
         // PCA
-        cv::Mat A( count_sp, 4, CV_32F );
+        /*cv::Mat A( count_sp, 4, CV_32F );
         cv::Mat C( count_sp, count_sp, CV_32F );
         cv::Mat u( count_sp, 1, CV_32F );
         cv::Mat v( count_sp, count_sp, CV_32F );
@@ -346,21 +348,21 @@ void Signal_processing::process() {
 
             ii++;
 
-        }
+        }*/
 
         // check correlation between signature and initial vectors
-        int nb_s[ count_signature ] = {0};
+        /*int nb_s[ count_signature ] = {0};
         for( int j=0; j<count_sp; j++ ) {
             float c_dist = 0.f;
             int best_color;
 
-            for( int i=0; i<count_signature; i++ ) {
+            for( int i=0; i<count_signature; i++ ) {*/
                 /*float correlation = ( ref_S.at<float>( i,0 ) - A.at<float>( j,0 ) ) * ( ref_S.at<float>( i,0 ) - A.at<float>( j,0 ) ) +
                                     ( ref_S.at<float>( i,1 ) - A.at<float>( j,1 ) ) * ( ref_S.at<float>( i,1 ) - A.at<float>( j,1 ) ) +
                                     ( ref_S.at<float>( i,2 ) - A.at<float>( j,2 ) ) * ( ref_S.at<float>( i,2 ) - A.at<float>( j,2 ) ) +
                                     ( ref_S.at<float>( i,3 ) - A.at<float>( j,3 ) ) * ( ref_S.at<float>( i,3 ) - A.at<float>( j,3 ) );
 */
-                cv::Mat ref( 1, 4, CV_32F );
+                /*cv::Mat ref( 1, 4, CV_32F );
                 cv::Mat te( 1, 4, CV_32F );
 
                 ref.at<float>( 0,0 ) = ref_S.at<float>( i,0 );
@@ -388,10 +390,10 @@ void Signal_processing::process() {
 
         }
 
-        cv::waitKey(1);
+        cv::waitKey(1);*/
 
         // detect independent HR
-        int tentative_HR[20] = {0};
+        /*int tentative_HR[20] = {0};
         int nb_tentative = 0;
         int energic=0;
         int energic_id=0;
@@ -409,13 +411,14 @@ void Signal_processing::process() {
 
         }
         HR = int( round( energic_id * 30.f * float( FS / float( size_signals ) ) ) );
-        //printf(" tentative HR %i, most energic: %i bpm\n", nb_tentative, HR );
+        printf(" tentative HR %i, most energic: %i bpm\n", nb_tentative, HR );
 
         int repart[ 200 * 200 ] = {0};
         for( int i=0; i<nb_sp; i++ ) {
             if( int(round(mean_HR[ i ])) > 0 && int(round(mean_HR[ i ])) < 200 && int( round( double( SNR[i] ) ) ) > 0 ) {
                 int temp = int(round(mean_HR[ i ]));
-                repart[ int(round(mean_HR[ i ])) + 200 * ( 200 - int( round( double( 10*SNR[i] ) ) ) ) ] = 1;
+                //repart[ int(round(mean_HR[ i ])) + 200 * ( 200 - int( round( double( 10*SNR[i] ) ) ) ) ] = 1;
+                repart[ int(round(mean_HR[ i ])) + 200 * ( 200 - int( round( double( min<float>(200, 10*SNR[i]) ) ) ) ) ] = 1;
 
             }
             else if( int(round(mean_HR[ i ])) < 0 )
@@ -443,7 +446,7 @@ void Signal_processing::process() {
         CvPlot::clear("HR");
         CvPlot::plot( "HR", HR_final, size_signals );
 
-        cv::waitKey( 1 );
+        cv::waitKey( 1 );*/
 
     }
 

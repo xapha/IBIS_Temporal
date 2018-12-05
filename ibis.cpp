@@ -876,7 +876,7 @@ void IBIS::update_adj() {
 
     int dx4[] = { -1, 0, 1, 0 };
     int dy4[] = { 0, -1, 0, 1 };
-    int* adj_label = new int[ 20 ];
+    int* adj_label = new int[ getActualSPNumber() ];
 
     int current_sp, prospect_sp;
     int j, k;

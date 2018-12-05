@@ -490,7 +490,7 @@ int main( int argc, char* argv[] )
 
         cv::Mat img;
         int ii=0;
-        std::string output_basename = get_name( argv[3] );
+        std::string output_basename = "";//get_name( argv[3] );
 
 #if SAVE_output
         if( type == 1 ) {
