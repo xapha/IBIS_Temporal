@@ -38,7 +38,7 @@ public:
     ~Signal_processing();
 
     void add_frame( int* parent, float* c_1, float* c_2, float* c_3, int nb_SP );
-    float* get_SNR();
+    const float* get_SNR();
     int get_HR() { return HR; }
     void process();
 

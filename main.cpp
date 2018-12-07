@@ -22,6 +22,7 @@
 
 #define SAVE_output         0
 #define visu                1
+#define visu_SNR	    1
 #define signal_size         300
 #define signal_processing   1
 
@@ -248,10 +249,9 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
         }
 
-        R_avg[i] /= float(ii); //float(nb_adj[i]);
-        G_avg[i] /= float(ii); //float(nb_adj[i]);
-        B_avg[i] /= float(ii); //float(nb_adj[i]);
-
+	R_avg[i] = R[i]/Super_Pixel->getActualSPNumber();
+	G_avg[i] = G[i]/Super_Pixel->getActualSPNumber();
+	B_avg[i] = B[i]/Super_Pixel->getActualSPNumber();
     }
 
     // signal processing
@@ -271,10 +271,9 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
 #if visu
         // SNR superposition
-        float* SNR;
+        const float* SNR;
         if( frame_index > signal_size ) {
             SNR = Signal->get_SNR();
-
         }
 
         for (i=0, ii=0; i < 3 * size; i += 3, ii++) {
@@ -328,14 +327,18 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
         cv::putText(*pImg, text, cv::Point(30,30),
             cv::FONT_HERSHEY_COMPLEX_SMALL, 0.8, cv::Scalar(200,200,250), 1, CV_AA);
 
-        /*for( int i=0; i<Super_Pixel->getActualSPNumber(); i++ ) {
-            sprintf( text, "%i", i );
+#if visu_SNR
+        if (frame_index > signal_size) {
+        for( int i=0; i<Super_Pixel->getActualSPNumber(); i++ ) {
+            sprintf( text, "%.1f", SNR[i] );
 
             cv::putText(*pImg, text, cv::Point( int(round(double(Super_Pixel->get_Xseeds()[i]))), int(round(double(Super_Pixel->get_Yseeds()[i]))) ),
                 cv::FONT_HERSHEY_COMPLEX_SMALL, 0.6, cv::Scalar(0,0,250), 1, CV_AA);
 
 
-        }*/
+        }
+}
+#endif
 #endif
 
         cv::imshow("rgb mean", *pImg);
@@ -489,7 +492,7 @@ int main( int argc, char* argv[] )
 
         cv::Mat img;
         int ii=0;
-        std::string output_basename = "";//get_name( argv[3] );
+        std::string output_basename = std::string(argv[3]);
 
 #if SAVE_output
         if( type == 1 ) {

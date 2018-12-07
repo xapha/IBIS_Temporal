@@ -1,5 +1,7 @@
 #include "signal_processing.h"
 
+#define VISU_SIGNAL_FINAL 1
+
 Signal_processing::Signal_processing( int MaxSP, int size_signal)
 {
     size_signals = size_signal;
@@ -136,7 +138,8 @@ void Signal_processing::process() {
                 fft_buff[ nb_sp * j + i ] = fft_data[ j ];
 
             // get SNR value
-            float d_width = 0.5 * 2 / float( FS / float( size_signals ) );
+	    float df = 0.5*2;
+            float d_width = df* float(size_signals) / float(FS);
 
             if( i == visu_snr )
                 circular_SNR[ max_SP * temp_index + i ] = compute_SNR( fft_data, size_signals, int( round( d_width ) ), 2, 1 );
@@ -150,22 +153,67 @@ void Signal_processing::process() {
         if( count_SNR < size_signals )
             count_SNR++;
 
-        /*float max_SNR=0;
         float weight[nb_sp] = {0.f};
-        float sum_weight=0.f;*/
+        float sum_weight=0.f;
         for( int i=0; i<nb_sp; i++ ) {
-            SNR[i] = SNR[i] / count_SNR;
-            mean_HR[ i ] /= count_SNR;
+            if (SNR[i] > 0)
+	    {
+            	SNR[i] = SNR[i] / count_SNR;
+            	mean_HR[ i ] /= count_SNR;
 
-            //weight[i] = pow( 10.0, double(SNR[i])/6 );
-            //sum_weight += weight[i];
+            	weight[i] = pow( 10.0, double(SNR[i])/10.0 );
+            	sum_weight += weight[i];
+	    }
+        }
+
+        memset( fft_data, 0, sizeof(double)*size_signals );
+
+        for( int i=0; i<nb_sp; i++ ) {
+		if (! isnan(buff_signals[max_SP * 50 + i]))
+		{
+            	for( int j=0; j<size_signals; j++ ) {
+                    if( SNR[i] > 0 ) {
+                        fft_data[j] += weight[i] * buff_signals[ max_SP * j + i ];
+		}
+
+              }
+            }
 
         }
+
+	// Signal final
+#if VISU_SIGNAL_FINAL
+	    CvPlot::clear("Signal_final");
+	    CvPlot::plot("Signal_final", fft_data, size_signals);
+#endif
+            fft(fft_data, size_signals, GSL_FFT_FORWARD);
+            for( int j=0; j<size_signals; j++ ) {
+                if( j > 0.8 * 2 / float( FS / float( size_signals ) ) && j < 4 * 2 / float( FS / float( size_signals ) ) )
+                    fft_data[j] *= fft_data[j];
+                else
+                    fft_data[j] = 0;
+
+            }
+
+
+
+            // get SNR value
+	    float df = 0.5*2;
+            float d_width = df* float(size_signals) / float(FS);
+
+	    float SNR_final;
+#if VISU_SIGNAL_FINAL 
+            SNR_final = compute_SNR( fft_data, size_signals, int( round( d_width ) ), 2, 1 );
+#else
+            SNR_final = compute_SNR( fft_data, size_signals, int( round( d_width ) ), 2, 0 );
+#endif
+
+        HR = round( float(gsl_stats_max_index( fft_data, 1, size_signals )) * 30.f * float( FS / float( size_signals ) ) );
     }
 
 }
 
-float* Signal_processing::get_SNR() {
+const float* Signal_processing::get_SNR() {
     return SNR;
 
 }
@@ -175,12 +223,9 @@ void Signal_processing::add_frame( int* parent, float* c_1, float* c_2, float* c
     nb_sp = nb_SP;
 
     for( int i=0; i<nb_sp; i++ ) {
-        if( parent[ i ] == i ) {
             circular_data_c1[ max_SP * index_circular + i ] = c_1[ i ];
             circular_data_c2[ max_SP * index_circular + i ] = c_2[ i ];
             circular_data_c3[ max_SP * index_circular + i ] = c_3[ i ];
-
-        }
 
         circular_parent[ max_SP * index_circular + i ] = parent[ i ];
 
@@ -205,7 +250,7 @@ void Signal_processing::construct_signal() {
     for( int j=0; j<nb_sp; j++ ) {
          parent_index = j;
 
-        for( int i=0; i<size_signals-1; i++ ) {
+        for( int i=0; i<size_signals; i++ ) {
             temp_index = index_circular - 1 - i;
             if( temp_index < 0 )
                 temp_index += size_signals;
@@ -256,9 +301,9 @@ void Signal_processing::construct_signal() {
         double sd_C3 = gsl_stats_sd( C3, 1, size_signals );
 
         for(int i=0; i<size_signals; i++) {
-            C1[i] = ( C1[i] - mean_C1 ) / sd_C1;
-            C2[i] = ( C2[i] - mean_C2 ) / sd_C2;
-            C3[i] = ( C3[i] - mean_C3 ) / sd_C3;
+            C1[i] = ( C1[i] / mean_C1 );
+            C2[i] = ( C2[i] / mean_C2 );
+            C3[i] = ( C3[i] / mean_C3 );
 
         }
 
@@ -288,12 +333,10 @@ void Signal_processing::construct_signal() {
 
         alpha = std_xf / std_yf;
 
-        for( int i=0; i<size_signals-1; i++ ) {
+        for( int i=0; i<size_signals; i++ ) {
             buff_signals[ max_SP * i + j ] = float( Xf[i] - alpha*Yf[i] );
-
         }
     }
-
 }
 
 void Signal_processing::fft(double* data, int n, int type)

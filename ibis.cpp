@@ -558,9 +558,6 @@ void IBIS::global_mean_seeds() {
     memset( bseeds, 0, sizeof(float) * maxSPNumber );
 
     int sp;
-#if THREAD_count > 1
-#pragma omp parallel for num_threads(THREAD_count)
-#endif
     for( int i=0; i<height; i++ ) {
         for( int j=0; j<width; j++ ) {
             sp = labels[ vertical_index[ i ] + j ];
@@ -785,9 +782,6 @@ bool IBIS::creation_deletion() {
         float invwt_1 = (float)SPTypicalLength / 20;
         invwt_1 = 1.0f / (invwt_1 * invwt_1);
 
-#if THREAD_count > 1
-#pragma omp parallel for num_threads(THREAD_count)
-#endif
         for( int i=0; i<SPNumber; i++ ) {
             // test continuity
             if( !count_diff[ i ] ) {
