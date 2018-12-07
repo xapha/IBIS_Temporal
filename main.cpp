@@ -139,31 +139,6 @@ void write_traces(float* C1, float* C2, float* C3, const std::string& output_lab
     file.close();
 }
 
-std::string get_name(const std::string& path_with_ext)
-{
-    int deb = path_with_ext.find_last_of("/");
-    /*int fin = path_with_ext.find_last_of(".");
-    return path_with_ext.substr(deb+1, fin-deb-1);*/
-
-    std::string Str1("subject");
-    std::string Str2("-gt");
-
-    std::size_t found_1 = path_with_ext.find(Str1);
-    std::size_t found_2 = path_with_ext.find(Str2);
-
-    if( found_1 != std::string::npos ) {
-        // dataset IUT
-        return path_with_ext.substr(found_1, found_1 + deb);
-
-    }
-    else if( found_2 != std::string::npos ) {
-        // dataset Le2i
-        return path_with_ext.substr(found_2-2, found_2 + deb);
-
-    }
-
-}
-
 void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signal, cv::Mat* img, std::string output_basename, int frame_index ) {
 
     int width = img->cols;
