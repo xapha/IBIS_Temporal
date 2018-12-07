@@ -344,17 +344,6 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
     //}
 #endif
 
-    delete pImg;
-    delete output_bounds;
-    delete[] sum_rgb;
-    delete[] count_px;
-    delete[] R;
-    delete[] G;
-    delete[] B;
-    delete[] R_avg;
-    delete[] G_avg;
-    delete[] B_avg;
-
 #if SAVE_output
     char output_labels[255] = {0};
     sprintf(output_labels, "results/%s/traces_%04i.seg", output_basename.c_str(), frame_index);
@@ -385,6 +374,16 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
     outfile.close();*/
 
 #endif
+    delete pImg;
+    delete output_bounds;
+    delete[] sum_rgb;
+    delete[] count_px;
+    delete[] R;
+    delete[] G;
+    delete[] B;
+    delete[] R_avg;
+    delete[] G_avg;
+    delete[] B_avg;
 
 }
 
