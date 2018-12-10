@@ -34,9 +34,8 @@ set(headerList
 )
 
 set(includeDirList ${includeDirList} $ENV{OPENCV_DIR}/include ./ )
-include_directories(/usr/local/include/opencv)
-include_directories(/usr/local/include/opencv2)
-include_directories(/usr/include/gsl)
+include_directories(${OpenCV_INCLUDE_DIRS})
+include_directories(${GSL_INCLUDE_DIRS})
 include_directories(/usr/include)
 
 set(libDirList ${libDirList} $ENV{OPENCV_DIR}/x64/vc14/lib )
@@ -45,4 +44,4 @@ include_directories(${includeDirList})
 link_directories(${libDirList})
 
 add_executable( ${PROJECT_NAME} ${sourceList} ${headerList} )
-target_link_libraries( ${PROJECT_NAME} ${OpenCV_LIBS} /usr/lib64/libgslcblas.so /usr/lib64/libgsl.so )
+target_link_libraries( ${PROJECT_NAME} ${OpenCV_LIBS} ${GSL_LIBRARIES} )
