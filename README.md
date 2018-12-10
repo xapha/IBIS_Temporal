@@ -19,7 +19,7 @@ For paralell execution, you will need *openMP* as well.
 
 ```Shell Session
 git clone "https://github.com/xapha/IBIS_temporal.git"
-cd IBIS
+cd IBIS_temporal
 mkdir build && cd build
 mkdir results
 cmake -D CMAKE_BUILD_TYPE=Release ..
