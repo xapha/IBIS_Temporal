@@ -22,11 +22,8 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     circular_data_c3 = new float[ max_SP * size_signals ];
     circular_parent = new int[ max_SP * size_signals ];
     circular_SNR = new float[ max_SP * size_signals ];
-    buff_HR = new double[ max_SP * size_signals ];
     fundamental = new float[ max_SP ];
     SNR = new float[ max_SP ];
-    mean_HR = new float[ max_SP ];
-    HR_final = new int[ size_signals ];
     signal = new float[ size_signals ];
     visu_signal = new float[ size_signals ];
     output = new float[ size_signals ];
@@ -34,7 +31,6 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     fft_buff = new double[ size_signals * max_SP ];
     variance = new double[ max_SP ];
 
-    memset(mean_HR, 0, sizeof(float) * max_SP);
     memset(buff_signals, 0, sizeof(float) * max_SP * size_signals );
     memset(buff_signals_c1, 0, sizeof(float) * max_SP * size_signals );
     memset(buff_signals_c2, 0, sizeof(float) * max_SP * size_signals );
@@ -44,8 +40,6 @@ Signal_processing::Signal_processing( int MaxSP, int size_signal)
     memset(circular_data_c3, 0, sizeof(float) * max_SP * size_signals );
     memset(circular_SNR, 0, sizeof(float) * max_SP * size_signals );
     memset(circular_parent, 0, sizeof(int) * max_SP * size_signals );
-    memset(HR_final, 0, sizeof(int) * size_signals );
-    memset(buff_HR, 0, sizeof(int) * max_SP * size_signals );
 
     PBV = new double[3*max_SP];
     color = new int[ max_SP ];
@@ -64,9 +58,6 @@ Signal_processing::~Signal_processing() {
     delete[] circular_SNR;
     delete[] fundamental;
     delete[] SNR;
-    delete[] buff_HR;
-    delete[] HR_final;
-    delete[] mean_HR;
 
     delete[] signal;
     delete[] visu_signal;
@@ -93,25 +84,6 @@ void Signal_processing::process() {
         int visu_snr = -1; //gsl_stats_max_index( fft_data, 1, nb_sp );
 
         for( int i=0; i<nb_sp; i++ ) {
-
-            // succesive HR estimation variance
-            for( int j=0; j<size_signals; j++ ) {
-                if( buff_HR[ max_SP * j + i ] > 40 && buff_HR[ max_SP * j + i ] < 140 )
-                    fft_data[ j ] = buff_HR[ max_SP * j + i ];
-                else
-                    fft_data[ j ] = 0;
-
-            }
-
-            bool stat = false;
-            for( int j=0; j<size_signals; j++ ) {
-                if( fft_data[j] > 0  ) {
-                    stat = true;
-                    break;
-
-                }
-
-            }
 
             for( int j=0; j<size_signals; j++ ) {
                 signal[ j ] = buff_signals[ max_SP * j + i ];
@@ -159,7 +131,6 @@ void Signal_processing::process() {
             if (SNR[i] > 0)
 	    {
             	SNR[i] = SNR[i] / count_SNR;
-            	mean_HR[ i ] /= count_SNR;
 
             	weight[i] = pow( 10.0, double(SNR[i])/10.0 );
             	sum_weight += weight[i];
