@@ -20,9 +20,9 @@
 #include "utils.h"
 #include "signal_processing.h"
 
-#define SAVE_output         0
+#define SAVE_output         1
 #define visu                1
-#define visu_SNR	    1
+#define visu_SNR	    	1
 #define signal_size         300
 #define signal_processing   1
 
@@ -195,10 +195,6 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
     }
 
-    /*R = Super_Pixel->get_lseeds();
-    G = Super_Pixel->get_aseeds();
-    B = Super_Pixel->get_bseeds();*/
-
     // increase stat
     int* adj = Super_Pixel->get_adjacent_sp();
     int* nb_adj = Super_Pixel->nb_adjacent_sp();
@@ -260,10 +256,6 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
                 pImg->ptr()[i + 1]  = (unsigned char) img->ptr()[i+1];
                 pImg->ptr()[i]      = (unsigned char) img->ptr()[i+0];
 
-                /*pImg->ptr()[i + 2]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 2 ]);
-                pImg->ptr()[i + 1]  = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 1 ]);
-                pImg->ptr()[i]      = (sum_rgb[ labels[ii] + Super_Pixel->getMaxSPNumber() * 0 ]);*/
-
                 if( ubuff[ ii ] == 255 ) {
                     pImg->ptr()[i + 2]  = 255;
                     pImg->ptr()[i + 1]  = 255;
@@ -273,17 +265,15 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
 
 #if signal_processing
                 if( frame_index > signal_size ) {
-                    int* color = Signal->get_color();
-
                     if( SNR[ labels[ii] ] > 0 && ubuff[ ii ] == 255 ) {
                         pImg->ptr()[i + 2]  = 0;
                         pImg->ptr()[i + 1]  = 0;
                         pImg->ptr()[i]      = 0;
 
                         if( SNR[ labels[ii] ] > 5 )
-                            pImg->ptr()[i + color[ labels[ii] ]]  = 255;
+                            pImg->ptr()[i + 0]  = 255;
                         else
-                            pImg->ptr()[i + color[ labels[ii] ]]  = (unsigned char)(255 * SNR[ labels[ii] ] / 5 );
+                            pImg->ptr()[i + 0]  = (unsigned char)(255 * SNR[ labels[ii] ] / 5 );
 
                     }
 
@@ -337,19 +327,6 @@ void execute_IBIS( int K, int compa, IBIS* Super_Pixel, Signal_processing* Signa
         file << parent[y] << std::endl;
 
     file.close();
-
-    /*sprintf(output_labels, "results/%s/frame_%i.seg", output_basename.c_str(), frame_index);
-    ofstream outfile;
-    outfile.open(output_labels);
-    for (int y=0 ; y<height ; y++)
-    {
-        for (int x=0 ; x<width-1 ; x++)
-        {
-            outfile << labels[y*width + x] << " ";
-        }
-        outfile << labels[y*width + width-1] << std::endl;
-    }
-    outfile.close();*/
 
 #endif
     delete pImg;

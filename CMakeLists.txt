@@ -15,6 +15,7 @@ find_package( GSL REQUIRED )
 
 set(CMAKE_CXX_STANDARD 14)
 set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
+#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 set(sourceList
     utils.cpp
